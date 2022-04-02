@@ -1,0 +1,39 @@
+:Call {Expression caller, []Expression args} = 
+    (a (b) c)
+;
+    // caller "(" ?( args * 0 ("," args) ) ")"
+:Identifier {} = 
+    'a..zA..Z' ~ *0'a..zA..Z0..9_'
+;
+
++Expression(Identifier, StringLiteral);
+
+EOL = ~("\r\n" | "\n" | "\r");
+
+WS = *1' \t\n\r';
+
+:StringLiteral _= "\"" :*0. "\""
+
+
+//*1 2 ... *start ... *start end
+
+// caller "(" ( ( args "," )* args)? ")"
+
+/*CABA E795 B7Y6 SNE7
+
+* [start] [end]. 
+* 0 . zero or more
+* 1 . one or more
+* 1 5 . one to five
+
+.* .+ .? START END
+.[] character class
+!. lookahead
+
+|
+
+/* '.' single quotes always capture only one character.
+If they have multiple characters inbetween them, they
+represent a list of alternates. two periods indicate a
+range of characters.
+

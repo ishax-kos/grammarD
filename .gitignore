@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/grammard
+grammard.so
+grammard.dylib
+grammard.dll
+grammard.a
+grammard.lib
+grammard-test-*
+*.exe
+*.o
+*.obj
+*.lst
