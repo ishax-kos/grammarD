@@ -1,6 +1,7 @@
 module main;
 
 import input;
+import nodes;
 
 import std.stdio;
 import std.format;
@@ -16,7 +17,7 @@ import std.algorithm;
 
 
 void main() {
-    InputSource source = InputSourceFile("gram/dion.gram");
+    InputSource source = new InputSourceFile("gram/dion.gram");
     
 
     Rule[] rules;

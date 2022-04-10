@@ -6,11 +6,11 @@
     'a..zA..Z' ~ *0'a..zA..Z0..9_'
 ;
 
-+Expression(Identifier, StringLiteral);
+// +Expression(Identifier, StringLiteral);
 
-EOL = ~("\r\n" | "\n" | "\r");
+LINE_BREAK = ~("\r\n" | "\n" | "\r");
 
-WS = *1' \t\n\r';
+WHITE_SPACE = *1' \n\r';
 
 :StringLiteral _= "\"" :*0. "\""
 

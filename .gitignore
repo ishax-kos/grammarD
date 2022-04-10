@@ -13,3 +13,7 @@ grammard-test-*
 *.o
 *.obj
 *.lst
+test.*
+test
+.*
+grammard.sln

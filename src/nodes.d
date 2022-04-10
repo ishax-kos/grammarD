@@ -13,8 +13,8 @@ class TokenRef {
 }
 
 alias Token = SumType!(
-    Property, 
-    Rule, 
+    Attribute, 
+    Declaration, 
     StringLiteral,
     NumberLiteral,
     BinaryOp,
@@ -39,11 +39,11 @@ class Group {
     override string toString() {
         import std.format;
         import std.stdio;
-        static _ = 0; writef!"%d_"(_++); scope(exit) _--;
+        // static _s = 0; writef!"%d_"(_s++); scope(exit) _s--;
         if (alts.length == 1) 
-            return format!"Group(%s)"(alts[0]);
+            return format!"Group(%(%s, %))"(alts[0]);
         else
-            return format!"Alternate(%s)"(alts);
+            return format!"Alternate(%(%s, %))"(alts);
     }
 }
 
@@ -71,34 +71,39 @@ class MultiCapture {
 struct Semicolon {}
 
 
-class Rule {
+class Declaration {
     string name;
-    Property[] args;
+    Argument[] args;
+    Group ruleBody;
     override string toString() {
         return name;
     }
 }
 
-class BareRule : Rule {
-
+class TypeDeclaration : Declaration {
+    Declaration rule;
+    Attribute[] members;
 }
 
-class TypeRule : BareRule {
+/+
+    class RuleTypeCluster {
+        Declaration[] subtypes;
+        /// Resolves to a sumtype
+        /// +Expression(Identifier, StringLiteral);
+    }
++/
+
+struct MemberRule {
+    Declaration type;
     string name;
-    Token[] ruleBody;
-    Property[] members;
 }
 
-
-class RuleTypeClass : Rule {
-    Rule[] subtypes;
-    /// Resolves to a sumtype
-    /// +Expression(Identifier, StringLiteral);
+struct Attribute {
+    Declaration type;
+    string name;
 }
 
-
-struct Property {
-    Rule type;
+struct Argument {
     string name;
 }
 
@@ -115,4 +120,11 @@ mixin template SetGet(T, string name) {
         if (__",name," == null) __",name," = new T();
         *__",name," = val;
     }");
+}
+
+
+class BadParse : Exception {
+    this(string msg, string file = __FILE__, size_t line = __LINE__) {
+        super(msg, file, line);
+    }
 }

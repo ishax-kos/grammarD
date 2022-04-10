@@ -1,7 +1,6 @@
 module input;
 
 import nodes;
-import rule_parsing;
 
 import std.ascii;
 
@@ -122,48 +121,9 @@ class InputSourceFile : InputSource {
 //+/
 
 void consumeWS(InputSource source) {
-    while (source.current.isWhite())
-        source.popChar();
-}
-
-
-string lexGName(InputSource source) {
-    string output;
-    source.consumeWS();
-    {
-        if (source.current.isAlpha)
-            output ~= source.current;
-        else throw new BadParse("");
+    while (source.current.isWhite()) {
         source.popChar();
     }
-    
-    while (true) {
-        char c = source.current;
-        if (c.isAlphaNum || c == '_') {
-            output ~= c;
-            source.popChar();
-        }
-        else break;
-    }
-    return output;
-}
-
-
-RuleRef lexGType(InputSource source) {
-    string name;
-    while (true) {
-        source.consumeWS();
-        if (source.current != '[') break;
-        source.popChar();
-        source.consumeWS();
-        if (source.popChar() != ']')
-            throw new BadParse("");
-        name ~= "[]";
-    }
-
-    name ~= lexGName(source);
-
-    return name;
 }
 
 
@@ -173,91 +133,6 @@ RuleRef lexGType(InputSource source) {
 //     source.seekRel(-1);
 //     return ret;
 // }
-
-
-Property[] lexGArgs(InputSource source) {
-    Property[] output;
-    {
-        source.consumeWS();
-        char c = source.popChar();
-        if (c == '{') {}
-        else throw new BadParse([c]);
-    }
-    
-    while (true) {
-        output ~= Property(
-            lexGType(source),
-            lexGName(source));
-
-        source.consumeWS();
-        char c = source.current;
-        if (c == ',') {source.popChar();}
-        else if (c == '}') {
-            source.popChar();
-            break;
-        }
-        else throw new BadParse("");
-        
-    }
-    return output;
-}
-
-
-void lexGChar(InputSource source, char ch) {
-    consumeWS(source);
-    if (source.current == ch) {
-        source.popChar();
-    }
-    else throw new BadParse("");
-}
-
-
-// RuleBody lexGBody(InputSource source) {
-// }
-
-
-
-class BadParse : Exception {
-    this(string msg, string file = __FILE__, size_t line = __LINE__) {
-        super(msg, file, line);
-    }
-}
-
-
-T parseG(T:Rule)(InputSource source) {
-    
-    Rule rule;
-    InputSource branch;
-    try {
-        branch = source.branch();
-        branch.lexGChar(':');
-        rule = new TypeRule();
-    }
-    catch (BadParse bp) try {
-        branch.lexGChar('+');
-        rule = new Rule();
-    }
-    
-    assert(rule);
-
-    rule.name = lexGName(source);
-    rule.args = lexGArgs(source);
-    
-    consumeWS(source);
-    if (source.current != '=')
-        throw new BadParse("");
-    source.popChar();
-    // rule.ruleBody;
-    while (true) {
-        Token token = getToken(source, rule.args);
-        if (token.match!(
-            (Semicolon _) => true,
-            (_) {rule.ruleBody ~= token; return false;}
-        )) break;
-    }
-    return rule;
-}
-
 
 unittest
 {
