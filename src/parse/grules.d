@@ -1,7 +1,8 @@
-module rule_parsing;
+module parse.grules;
 
 import nodes;
 import input;
+import parse.gstatements;
 // import std.uni;
 import std.stdio : write, writeln, writef, writefln;
 import std.sumtype;
@@ -9,7 +10,7 @@ import std.conv;
 import std.format;
 
 
-Token getToken(InputSource source, Property[] args) {
+Token getToken(InputSource source, Attribute[] args) {
     Token token;
     // writeln(source.seek);
     source.consumeWS();
@@ -54,7 +55,10 @@ Token getToken(InputSource source, Property[] args) {
             
     //     ])));
     // }
-    catch (BadParse e) { earr~=e; throw new Error(earr.format!"%(\n%s\n%)");}
+    catch (BadParse e) { 
+        earr~=e; 
+        throw new Error(earr.format!"%(\n%s\n%)");
+    }
     // write(source.seek, " ");
     source.seek = branch.seek;
     // write(source.seek, " ");
@@ -107,7 +111,7 @@ NumberLiteral ruleFetchNumberLiteral(InputSource source) {
 }
 
 
-Property ruleFetchProperty(InputSource source, Property[] args) {
+Attribute ruleFetchProperty(InputSource source, Attribute[] args) {
     
     string name = source.lexGName();
     foreach (arg; args) {
@@ -119,12 +123,9 @@ Property ruleFetchProperty(InputSource source, Property[] args) {
 }
 
 
-Rule ruleFetchRule(InputSource source, Rule[] rules) {
-    
-    ///search all rules for rule
-    Rule rule = new Rule();
-    rule.name = lexGName(source);
-    return rule;
+Declaration ruleFetchRule(InputSource source, Declaration[] rules) {
+    import symtable;
+    return foundCall(lexGName(source));
 }
 
 
@@ -149,7 +150,7 @@ Parentheses ruleFetchParentheses(InputSource source) {
 }
 
 
-MultiCapture ruleFetchMultiStar(InputSource source, Property[] args) {
+MultiCapture ruleFetchMultiStar(InputSource source, Attribute[] args) {
     
     consumeWS(source);
     if (source.popChar != '*') throw new BadParse("");
@@ -165,7 +166,7 @@ MultiCapture ruleFetchMultiStar(InputSource source, Property[] args) {
 }
 
 
-MultiCapture ruleFetchMultiQM(InputSource source, Property[] args) {
+MultiCapture ruleFetchMultiQM(InputSource source, Attribute[] args) {
     
     consumeWS(source);
     if (source.popChar != '?') throw new BadParse("");
@@ -192,25 +193,30 @@ string ruleFetchSymbol(InputSource source, string[] symbols) {
 }
 
 
-Group ruleFetchGroup(InputSource source, Property[] args) {
+Group ruleFetchGroup(InputSource source, Attribute[] args) {
     
     consumeWS(source);
     if (source.current != '(') throw new BadParse("");
     source.popChar();
-    Group g = new Group();
-    uint alt = 0;
+    Token[][] alternates;
+    Token[] group;
     while (true) {
         consumeWS(source);
             // if (source.ruleFetchParentheses() == Parentheses.closed)
             //     break;
             // else throw new BadParse("");
-        if (source.current == ')') break;
-        if (source.current == '|') {g.alts.length += 1; alt += 1;}
-        g.alts[alt] ~= getToken(source, args);
-        writeln(g.alts[alt]);
+        if (source.current == ')') {
+            alternates ~= group;
+            break;
+        }
+        if (source.current == '|') {
+            alternates ~= group;
+            group = [];
+        }
+        group ~= getToken(source, args);
     }
     source.popChar;
-    return g;
+    return new Group(alternates);
 }
 
 
@@ -236,28 +242,9 @@ unittest
     import std.conv;
     writeln("---- Unittest ", __FILE__, " ----");
     // auto source = new InputSourceString(`"foobar"`);
-    auto source = new InputSourceString(`(a *0b (c) )`);
-    Property[] args;
-    writeln(ruleFetchGroup(source, args));
-
-    /+
-        Rule node = source.parseGRule();
-        writeln(node.name);
-        writeln(node.args);
-        writeln(node.ruleBody);
-        // writeln(node.ruleBody[2].match!(
-        //     (MultiCapture m) => (m.token).match!(
-        //         (Group g) => g.alts[0][3].match!(
-        //             (MultiCapture m) => (m.token).match!(
-        //                 (Group g) => g.alts[0][3].match!(
-        //                     (_) => typeof(_).stringof
-        //                 ),
-        //                 (_) => ""
-        //             ),
-        //             (_) => ""
-        //         ),
-        //         (_) => ""
-        //     ),
-        //     (_) => ""
-    // )); +/
+    auto source = new InputSourceString(`(caller "(" ?( args * 0 ("," args) ) ")")`);
+    Attribute[] args;
+    writeln(
+        ruleFetchGroup(source, args)
+    );
 }
