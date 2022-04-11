@@ -74,16 +74,16 @@ struct Semicolon {}
 class Declaration {
     string name;
     Argument[] args;
+    Attribute[] members;
     Group ruleBody;
     override string toString() {
         return name;
     }
 }
 
-class TypeDeclaration : Declaration {
-    Declaration rule;
-    Attribute[] members;
-}
+// class TypeDeclaration : Declaration {
+//     Attribute[] members;
+// }
 
 /+
     class RuleTypeCluster {
