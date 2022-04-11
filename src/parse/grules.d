@@ -12,57 +12,31 @@ import std.format;
 
 Token getToken(InputSource source, Attribute[] args) {
     Token token;
-    // writeln(source.seek);
     source.consumeWS();
     typeof(source) branch = source;
-    // auto seek = source.seekl
     Exception[] earr;
-    try {
-        branch = source.branch();
-        token = Token(branch.ruleFetchSemicolon());
+    // bool done;
+
+    static foreach (expr; [
+        () => Token(branch.ruleFetchProperty(args)),
+        () => Token(branch.ruleFetchGroup(args)),
+        () => Token(branch.ruleFetchRule()),
+        () => Token(branch.ruleFetchStringLiteral()),
+        () => Token(branch.ruleFetchNumberLiteral()),
+        () => Token(branch.ruleFetchMultiStar(args)),
+        () => Token(branch.ruleFetchMultiQM(args))
+    ]) {
+        try {
+            branch = source.branch();
+            token = expr();
+            goto Done;
+        }
+        catch (BadParse e) earr~=e;
     }
-    catch (BadParse e) try { earr~=e;
-        branch = source.branch();
-        token = Token(branch.ruleFetchProperty(args));
-    }
-    catch (BadParse e) try { earr~=e;
-        branch = source.branch();
-        token = Token(branch.ruleFetchGroup(args));
-    }
-    catch (BadParse e) try { earr~=e;
-        branch = source.branch();
-        token = Token(branch.ruleFetchRule([]));
-    }
-    catch (BadParse e) try { earr~=e;
-        branch = source.branch();
-        token = Token(branch.ruleFetchStringLiteral());
-    }
-    catch (BadParse e) try { earr~=e;
-        branch = source.branch();
-        token = Token(branch.ruleFetchNumberLiteral());
-    }
-    catch (BadParse e) try { earr~=e;
-        branch = source.branch();
-        token = Token(branch.ruleFetchMultiStar(args));
-    }
-    catch (BadParse e) try { earr~=e;
-        branch = source.branch();
-        token = Token(branch.ruleFetchMultiQM(args));
-    }
-    // catch (BadParse e) try { earr~=e;
-    //     branch = source.branch();
-    //     token = Token(RightOp(branch.ruleFetchSymbol([
-            
-    //     ])));
-    // }
-    catch (BadParse e) { 
-        earr~=e; 
-        throw new Error(earr.format!"%(\n%s\n%)");
-    }
-    // write(source.seek, " ");
+    throw new Error(earr.format!"%(\n%s\n%)");
+
+    Done:
     source.seek = branch.seek;
-    // write(source.seek, " ");
-    // writeln(token);
     return token;
 }
 
@@ -123,30 +97,9 @@ Attribute ruleFetchProperty(InputSource source, Attribute[] args) {
 }
 
 
-Declaration ruleFetchRule(InputSource source, Declaration[] rules) {
+Declaration ruleFetchRule(InputSource source) {
     import symtable;
     return foundCall(lexGName(source));
-}
-
-
-Semicolon ruleFetchSemicolon(InputSource source) {
-    
-    lexGChar(source, ';');
-    return Semicolon();
-}
-
-
-Parentheses ruleFetchParentheses(InputSource source) {
-    
-    source.consumeWS();
-    char paren = source.popChar();
-    if (paren == '(') return Parentheses.open; 
-    // while (source.current != ')') {
-    //     getToken(source, args);
-    // }
-
-    if (paren == ')') return Parentheses.closed;
-    else throw new BadParse("Not a parenthesis.");
 }
 
 
