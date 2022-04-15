@@ -15,13 +15,13 @@ T parseG(T:Declaration)(InputSource source) {
     import parse.grules;
     Declaration rule = new Declaration;
     rule.name = lexGName(source);
-    // rule.args = lexGArgs(source);
+    rule.members = lexGTypeArgs(source);
     
     consumeWS(source);
     if (source.current != '=')
         throw new BadParse("");
     source.popChar();
-    rule.ruleBody = source.ruleFetchGroup([]);
+    rule.ruleBody = source.ruleFetchGroup(rule.members);
     // rule.ruleBody;
     // while (true) {
     //     Token token = getToken(source, rule.args);
@@ -36,11 +36,11 @@ T parseG(T:Declaration)(InputSource source) {
 }
 
 
-T parseG(T:TypeDeclaration)(InputSource source) {
-    lexGChar(source, ':');
+// T parseG(T:TypeDeclaration)(InputSource source) {
+//     lexGChar(source, ':');
 
 
-}
+// }
 
 
 
@@ -71,12 +71,15 @@ string lexGName(InputSource source) {
 
 string lexGType(InputSource source) {
     string name;
+    import std.conv;
 
     source.consumeWS();
-    if (source.current != '[') {
-        source.consumeWS();
-        if (source.popChar() != ']')
-            throw new BadParse("");
+    if (source.current == '[') {
+        source.popChar(); source.consumeWS();
+        if (source.current != ']')
+            throw new BadParse(source.seek.to!string);
+        else
+            source.popChar(); source.consumeWS();
     }
     // while (true) {
     //     source.consumeWS();
@@ -96,28 +99,35 @@ string lexGType(InputSource source) {
 
 
 Attribute[] lexGTypeArgs(InputSource source) {
+    import std.format;
     Attribute[] output;
     {
         source.consumeWS();
         char c = source.popChar();
         if (c == '{') {}
-        else throw new BadParse([c]);
+        else throw new BadParse(format!"%s, %s"(c, source.seek));
     }
+    source.consumeWS();
     
-    while (true) { 
+    if (source.current == '}') {
+        source.popChar();
+    } 
+    else while (true) {
         output ~= Attribute(
             foundCall(lexGType(source)),
             lexGName(source));
 
         source.consumeWS();
-        char c = source.current;
-        if (c == ',') {source.popChar();}
+        char c = source.popChar;
+        if (c == ',') {
+            source.consumeWS();
+        }
         else if (c == '}') {
-            source.popChar();
             break;
         }
         else throw new BadParse("");
     }
+    // writeln(source.seek);
     return output;
 }
 
@@ -153,6 +163,37 @@ bool parseComments(InputSource source) {
     return false;
 }
 
+
+Declaration[] parseGrammar(InputSource source) {
+    table.clear;
+    foundDef(new EmptyRule());
+    Declaration[] grammar;
+    source.consumeWS();
+    while (!source.end()) {
+        if (source.current == '/')
+            source.parseComments();
+        else
+            grammar ~= source.parseG!Declaration();
+        source.consumeWS();
+    }
+
+    foreach (item; [
+        defaultLineBreak(),
+        defaultWS(),
+        defaultIdentifier(),
+        defaultStringLiteral()
+    ]) {
+        import symtable;
+        try foundDef(item);
+        catch (SymbolAlreadyDefined) {}
+    }
+    
+    foreach (key, entry; table) {
+        if (entry is null) throw new Error("\""~key~"\" is not declared!");
+    }
+
+    return grammar;
+}
 
 
 Declaration defaultWS() {
@@ -229,22 +270,8 @@ unittest
     import std.stdio;
     writeln("---- Unittest ", __FILE__, " ----");
 
-    table.clear;
 
-    auto source = new InputSourceString(
-`Rule1 = (
-    Rule2 ?(":" "blah")
-)`);
-    source.parseG!Declaration();
+    parseGrammar(new InputSourceFile("gram/dion.gram"));
+
     writeln(table);
-    source = new InputSourceString(
-`Rule2 = 
-    (Fuck *0"B")
-`
-    );
-
-
-    source.parseG!Declaration();
-    writeln(table);
-
 }
