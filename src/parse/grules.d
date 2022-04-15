@@ -19,10 +19,12 @@ Token getToken(InputSource source, Attribute[] args) {
 
     static foreach (expr; [
         () => Token(branch.ruleFetchProperty(args)),
+        () => Token(branch.ruleFetchWildCard()),
         () => Token(branch.ruleFetchGroup(args)),
         () => Token(branch.ruleFetchRule()),
         () => Token(branch.ruleFetchStringLiteral()),
         () => Token(branch.ruleFetchNumberLiteral()),
+        () => Token(branch.ruleFetchCharCaptureGroup()),
         () => Token(branch.ruleFetchMultiStar(args)),
         () => Token(branch.ruleFetchMultiQM(args))
     ]) {
@@ -33,11 +35,18 @@ Token getToken(InputSource source, Attribute[] args) {
         }
         catch (BadParse e) earr~=e;
     }
-    throw new Error(earr.format!"%(\n%s\n%)");
+    throw new Error(earr.format!"%(%s\n\n%)\n\nFinal Error Stack");
 
     Done:
     source.seek = branch.seek;
     return token;
+}
+
+
+CharWildCard ruleFetchWildCard(InputSource source) {
+    source.consumeWS();
+    if (source.popChar() != '.') throw new BadParse("");
+    return CharWildCard();
 }
 
 
@@ -62,6 +71,30 @@ StringLiteral ruleFetchStringLiteral(InputSource source) {
         }
     }
     return StringLiteral(output);
+}
+
+
+CharCaptureGroup ruleFetchCharCaptureGroup(InputSource source) {
+    
+    source.consumeWS();
+    string chars;
+    if (source.popChar != '\'')
+        throw new BadParse("\' not found. Found "~source.current~" instead.");
+    while (true) {
+        if (source.current() == '\\') {
+            source.popChar();
+            if (source.current() == '\'')
+                chars ~= source.popChar();
+        }
+        else {
+            if (source.current() == '\'') {
+                source.popChar();
+                break;
+            }
+            chars ~= source.popChar();
+        }
+    }
+    return CharCaptureGroup(chars);
 }
 
 
@@ -97,7 +130,7 @@ Attribute ruleFetchProperty(InputSource source, Attribute[] args) {
 }
 
 
-Declaration ruleFetchRule(InputSource source) {
+RuleRef ruleFetchRule(InputSource source) {
     import symtable;
     return foundCall(lexGName(source));
 }
@@ -108,8 +141,10 @@ MultiCapture ruleFetchMultiStar(InputSource source, Attribute[] args) {
     consumeWS(source);
     if (source.popChar != '*') throw new BadParse("");
     MultiCapture mc = new MultiCapture();
-    mc.low = ruleFetchNumberLiteral(source).num;
-    consumeWS(source);
+
+    try {mc.low  = ruleFetchNumberLiteral(source).num;}
+    catch(BadParse) {mc.low  = 0;}
+
     try {mc.high = ruleFetchNumberLiteral(source).num;}
     catch(BadParse) {mc.high = 0;}
     
@@ -147,10 +182,26 @@ string ruleFetchSymbol(InputSource source, string[] symbols) {
 
 
 Group ruleFetchGroup(InputSource source, Attribute[] args) {
+    import symtable;
     
     consumeWS(source);
-    if (source.current != '(') throw new BadParse("");
-    source.popChar();
+
+    RuleRef spaceRule = foundCall("WS");
+
+    if (source.current == '~') {
+        source.popChar(); consumeWS(source);
+        if (source.current == '(') {
+            // writeln("fpfgdf");
+            source.popChar();
+            spaceRule = foundCall("");
+        }
+        else {
+            spaceRule = source.ruleFetchRule();
+            if (source.popChar() != '(') throw new BadParse("");
+        }
+    }
+    else if (source.popChar() != '(') throw new BadParse("");
+
     Token[][] alternates;
     Token[] group;
     while (true) {
@@ -160,18 +211,23 @@ Group ruleFetchGroup(InputSource source, Attribute[] args) {
             // else throw new BadParse("");
         if (source.current == ')') {
             alternates ~= group;
+            source.popChar;
             break;
         }
+        else
         if (source.current == '|') {
             alternates ~= group;
+            source.popChar;
             group = [];
         }
-        group ~= getToken(source, args);
+        else {group ~= getToken(source, args);}
+        
     }
-    source.popChar;
-    return new Group(alternates);
+    Group g = new Group();
+    g.alts = alternates;
+    g.spaceRule = spaceRule;
+    return g;
 }
-
 
 
 unittest
@@ -195,8 +251,10 @@ unittest
     import std.conv;
     writeln("---- Unittest ", __FILE__, " ----");
     // auto source = new InputSourceString(`"foobar"`);
-    auto source = new InputSourceString(`(caller "(" ?( args * 0 ("," args) ) ")")`);
+    auto source = new InputSourceString(`(a | b | c)`);
+
     Attribute[] args;
+    writeln(1);
     writeln(
         ruleFetchGroup(source, args)
     );
