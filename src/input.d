@@ -120,31 +120,3 @@ class InputSourceFile : InputSource {
 }
 //+/
 
-void consumeWS(InputSource source) {
-    while (source.current.isWhite()) {
-        source.popChar();
-    }
-}
-
-
-// bool testLexGArgs(InputSource source) {
-//     source.consumeWS();
-//     bool ret = source.popChar() == '(';
-//     source.seekRel(-1);
-//     return ret;
-// }
-
-unittest
-{
-    InputSource source = InputSourceString.fromFile(`gram/dion.gram`);
-
-    
-    // source.consumeWS();
-    // source.consumeWS();
-    // source.consumeWS();
-    // source.consumeWS();
-    // writeln(source.popChar());
-
-    // writeln(source.lexGArgs());
-    // source.seek = 4;
-}

@@ -206,10 +206,3 @@ mixin template SetGet(T, string name) {
         *__",name," = val;
     }");
 }
-
-
-class BadParse : Exception {
-    this(string msg, string file = __FILE__, size_t line = __LINE__) {
-        super(msg, file, line);
-    }
-}
