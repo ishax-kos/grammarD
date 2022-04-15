@@ -7,8 +7,16 @@ import nodes;
 Declaration[string] table;
 
 
-Declaration foundCall(string name) {
-    return table.require(name, null);
+class SymbolAlreadyDefined : Exception {
+    this(string msg, string file = __FILE__, size_t line = __LINE__) {
+        super(msg, file, line);
+    }
+}
+
+
+RuleRef foundCall(string name) {
+    table.require(name, null);
+    return RuleRef(name);
 }
 
 Declaration foundDef(Declaration rule) {
@@ -19,7 +27,7 @@ Declaration foundDef(Declaration rule) {
             if (a is null)
                 return rule;
             else
-                throw new Error("Symbol Already Defined");
+                throw new SymbolAlreadyDefined("\""~a.name~"\" Symbol Already Defined");
         }
     );
     return rule;
