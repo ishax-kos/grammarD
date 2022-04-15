@@ -131,6 +131,29 @@ void lexGChar(InputSource source, char ch) {
 }
 
 
+bool parseComments(InputSource source) {
+    consumeWS(source);
+    if (source.current == '/') {
+        source.popChar();
+        if (source.current == '*') {
+            source.popChar();
+            while (1) {
+                if (source.end) break;
+                parseComments(source);
+                if (source.popChar() == '*') {
+                    if (source.popChar() == '/') {
+                        break;
+                    }
+                }
+            }
+            return true;
+        }
+        else source.seek(source.seek-1);
+    }
+    return false;
+}
+
+
 unittest
 {
     import std.stdio;
