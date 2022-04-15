@@ -154,6 +154,76 @@ bool parseComments(InputSource source) {
 }
 
 
+
+Declaration defaultWS() {
+    auto r = new Declaration();
+    r.name = "WS";
+    r.ruleBody = new Group(
+        [[Token(new MultiCapture(
+            Token(CharCaptureGroup(" \n\r")),
+            1,0
+        ))]], 
+        RuleRef("")
+    );
+    return r;
+}
+
+Declaration defaultLineBreak() {
+    auto r = new Declaration();
+    // auto m = new MultiCapture();
+    r.name = "LineBreak";
+    r.ruleBody = new Group(
+        [
+            [Token(StringLiteral("\r\n"))], 
+            [Token(StringLiteral("\r"))], 
+            [Token(StringLiteral("\n"))]
+        ],
+        RuleRef("")
+    );
+    return r;
+}
+
+Declaration defaultIdentifier() {
+    auto r = new Declaration();
+    r.name = "Identifier";
+    r.ruleBody = new Group(
+        [[
+            Token(CharCaptureGroup("a..zA..Z_")),
+            Token(new MultiCapture(
+                Token(CharCaptureGroup("a..zA..Z0..9_")),
+                0, 0
+            ))
+        ]],
+        RuleRef("")
+    );
+    return r;
+}
+
+
+Declaration defaultStringLiteral() {
+    auto r = new Declaration();
+    r.name = "StringLiteral";
+    r.ruleBody = new Group(
+        [[
+            Token(StringLiteral("\"")),
+            Token(new MultiCapture(
+                Token(new Group(
+                    [
+                        [Token(StringLiteral("\\\""))], 
+                        [Token(CharWildCard())]
+                    ],
+                    RuleRef("")
+                )),
+                0, 0
+            )),
+            Token(StringLiteral("\""))
+        ]],
+        RuleRef("")
+    );
+    return r;
+}
+
+
 unittest
 {
     import std.stdio;
