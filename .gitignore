@@ -17,3 +17,6 @@ test.*
 test
 .*
 grammard.sln
+test.d
+gram/dion.gram
+gram/dion.gram
