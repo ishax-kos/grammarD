@@ -3,21 +3,20 @@ module input;
 import nodes;
 
 import std.ascii;
-
 import std.sumtype;
 
-
-
-interface InputSource {
+abstract
+class InputSource {
+    Declaration[string] table;
+    // abstract {
     char popChar();
     bool end();
-    @property
-    ulong seek();
-    @property
-    void seek(ulong);
+    @property ulong seek();
+    @property void seek(ulong);
     char current();
     ulong size();
     InputSource branch();
+    // }
 }
 
 void seekRel(InputSource source, long offset) {
@@ -31,49 +30,61 @@ class InputSourceString : InputSource {
     this(string text) {
         str = text;
     }
-
-    InputSource branch() {
+    
+    override InputSource branch() {
         auto iss = new InputSourceString(str);
         iss.seek = this.seek;
         return iss;
     }
 
     static fromFile(string path) {
-        import std.stdio: File;
+        import std.stdio : File;
+
         File f = File(path, "rb");
         char[] buffer = new char[f.size];
         f.rawRead(buffer);
         return new InputSourceString(cast(string) buffer);
     }
 
-    ulong seek() {return _seek;}
-    void seek(ulong set) {
+    override ulong seek() {
+        return _seek;
+    }
+
+    override void seek(ulong set) {
         assert(set <= str.length);
         _seek = set;
     }
 
-    char popChar() {
-        if (end()) return 0;
-        else return str[_seek++];
+    override char popChar() {
+        if (end())
+            return 0;
+        else
+            return str[_seek++];
     }
 
-    bool end() {
+    override bool end() {
         return _seek >= size;
     }
 
-    char current() {
-        if (end()) return 0;
-        else return str[_seek];
+    override char current() {
+        if (end())
+            return 0;
+        else
+            return str[_seek];
     }
 
-    ulong size() {return str.length;}
+    override ulong size() {
+        return str.length;
+    }
 
+    // ref Declaration[string] table() {return _table;}
 
-    private: 
-    ulong _seek = 0;
-    string str = "";
+    private {
+        ulong _seek = 0;
+        string str = "";
+        // Declaration[string] _table;
+    }
 }
-
 
 //+
 class InputSourceFile : InputSource {
@@ -83,40 +94,52 @@ class InputSourceFile : InputSource {
         file = new MmFile(path);
     }
 
-    this(MmFile file, ulong seek) 
-        {this.file = file; this.seek = seek;}
+    this(MmFile file, ulong seek) {
+        this.file = file;
+        this.seek = seek;
+    }
 
-    InputSource branch() {
+    override InputSource branch() {
         return new InputSourceFile(file, seek);
     }
 
+    override ulong seek() {
+        return _seek;
+    }
 
-    ulong seek() {return _seek;}
-    void seek(ulong set) {
+    override void seek(ulong set) {
         assert(set <= file.length);
         _seek = set;
     }
 
-    char popChar() {
-        if (end()) return 0;
-        else return file[_seek++];
+    override char popChar() {
+        if (end())
+            return 0;
+        else
+            return file[_seek++];
     }
 
-    bool end() {
+    override bool end() {
         return _seek >= size;
     }
 
-    char current() {
-        if (end()) return 0;
-        else return file[_seek];
+    override char current() {
+        if (end())
+            return 0;
+        else
+            return file[_seek];
     }
 
-    ulong size() {return file.length;}
+    override ulong size() {
+        return file.length;
+    }
 
+    // ref Declaration[string] table() {return _table;}
 
-    private: 
-    ulong _seek = 0;
-    MmFile file;
+    private {
+        ulong _seek = 0;
+        MmFile file;
+        // Declaration[string] _table;
+    }
 }
 //+/
-

@@ -1,10 +1,12 @@
 module symtable;
 
-import std.sumtype;
 import nodes;
+import input;
+
+import std.sumtype;
 
 
-Declaration[string] table;
+// Declaration[string] table;
 
 
 class SymbolAlreadyDefined : Exception {
@@ -14,21 +16,37 @@ class SymbolAlreadyDefined : Exception {
 }
 
 
-RuleRef foundCall(string name) {
-    table.require(name, null);
-    return RuleRef(name);
+RuleRef foundCall(InputSource source, string name) {
+    if (name !in source.table) {
+        source.table[name] = null;
+    }
+    return RuleRef(source, name);
 }
 
-Declaration foundDef(Declaration rule) {
-    table.update(
-        rule.name, 
-        () => rule,
-        (Declaration a) {
-            if (a is null)
-                return rule;
-            else
-                throw new SymbolAlreadyDefined("\""~a.name~"\" Symbol Already Defined");
+Declaration foundDef(InputSource source, Declaration rule) {
+    if (rule.name !in source.table) {
+        source.table[rule.name] = rule;
+    }
+    else {
+        if (source.table[rule.name] is null) {
+            source.table[rule.name] = rule;
         }
-    );
+        else throw new SymbolAlreadyDefined(
+            "\""~source.table[rule.name].name
+            ~"\" Symbol Already Defined"
+        );
+    }
+    // source.table.update(
+    //     rule.name,
+    //     () => rule,
+    //     (Declaration a) {
+    //         if (a)
+    //             return rule;
+    //         else
+    //             throw new SymbolAlreadyDefined(
+    //                 "\""~a.name
+    //                 ~"\" Symbol Already Defined");
+    //     }
+    // );
     return rule;
 }

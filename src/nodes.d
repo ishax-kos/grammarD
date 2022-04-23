@@ -13,30 +13,31 @@ public import std.sumtype;
 
 alias Token = SumType!(
     Attribute,
-    CharCaptureGroup,
-    StringLiteral,
+    RuleRef,
     NumberLiteral,
+    VerbatimText,
+    CharCaptureGroup,
     CharWildCard,
     MultiCapture,
-    Group,
-    RuleRef
+    Group
     );
 
 struct RuleRef {
     import symtable;
+    InputSource source;
     string index;
     Declaration rule() {
-        auto v = table[index];
+        auto v = source.table[index];
         assert(v !is null);
         return v;
     }
     string name() {
-        auto v = table[index];
+        auto v = source.table[index];
         if (v is null) return index;
         else return v.name;
     }
 }
-struct StringLiteral {string str;}
+struct VerbatimText {string str;}
 struct ___CharCaptureGroup {
     string _options;
     string options() {
@@ -104,15 +105,15 @@ class Group {
     this (Token[][] alts, RuleRef spRule) {this.alts = alts; spaceRule = spRule;}
     override string toString() {
         import std.format;
-        import std.conv;
-        import std.algorithm;
-        import std.array;
-        import std.stdio;
+        // import std.conv;
+        // import std.algorithm;
+        // import std.array;
+        // import std.stdio;
         // static _s = 0; writef!"%d_"(_s++); scope(exit) _s--;
         if (alts.length == 1) 
             return format!"Group(%(%s, %))"(alts[0]);
         else {
-            writeln(0);
+            // writeln(0);
             // return "Alternate(" ~ alts.map!(a => a.to!string).join(", ") ~ ")";
             return format!"Alternate(%(%s, %))"(alts);
         }
@@ -150,9 +151,11 @@ class MultiCapture {
 // struct Parentheses {bool open; bool close() {return !open;}}
 struct Semicolon {}
 
-
-class Declaration {
+abstract class Declaration {
     string name;
+}
+
+class DeclarationStruct : Declaration {
     Argument[] arguments;
     Attribute[] members;
     Group ruleBody;
@@ -162,26 +165,19 @@ class Declaration {
     }
 }
 
-class EmptyRule : Declaration {
-    // void codeGen();
+class DeclarationSum : Declaration {
+    RuleRef[] types;
 }
 
-// class TypeDeclaration : Declaration {
-//     Attribute[] members;
+class EmptyRule : Declaration {}
+
+// alias Declaration = SumType!(EmptyRule, DeclarationStruct, DeclarationSum);
+
+
+// struct MemberRule {
+//     RuleRef type;
+//     string name;
 // }
-
-/+
-    class RuleTypeCluster {
-        Declaration[] subtypes;
-        /// Resolves to a sumtype
-        /// +Expression(Identifier, StringLiteral);
-    }
-+/
-
-struct MemberRule {
-    RuleRef type;
-    string name;
-}
 
 struct Attribute {
     RuleRef type;

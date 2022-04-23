@@ -1,4 +1,4 @@
-module parse.lex;
+module parsing.lex;
 
 import input;
 
@@ -104,4 +104,34 @@ class BadParse : Exception {
     this(string msg, string file = __FILE__, size_t line = __LINE__) {
         super(msg, file, line);
     }
+}
+
+
+import std.traits;
+import std.meta;
+pragma(inline)
+T tryAll(T, C...)(InputSource source)
+// if (is(C : T delegate(InputSource))) 
+{
+    import std.format;
+    import std.stdio;
+
+    consumeWS(source);
+    T output;
+    InputSource branch = source;
+    Exception[] earr;
+
+    static foreach (expr; C) {
+        try {
+            branch = source.branch();
+            output = cast(T) expr(branch);
+            goto Done;
+        }
+        catch (BadParse e) earr~=e;
+    }
+    throw new Error(earr.format!"%(%s\n\n%)\n\nFinal Error Stack");
+
+    Done:
+    source.seek = branch.seek;
+    return output;
 }

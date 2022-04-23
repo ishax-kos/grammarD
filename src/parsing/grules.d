@@ -1,8 +1,8 @@
-module parse.grules;
+module parsing.grules;
 
 import nodes;
 import input;
-import parse.lex;
+import parsing.lex;
 
 import std.stdio : write, writeln, writef, writefln;
 import std.sumtype;
@@ -10,6 +10,22 @@ import std.conv;
 import std.format;
 
 
+
+Token getToken(InputSource source, Attribute[] args) {
+    import std.functional;
+    return tryAll!(Token, 
+        (a) => a.ruleFetchProperty(args),
+        (a) => a.ruleFetchWildCard(),
+        (a) => a.ruleFetchGroup(args),
+        (a) => a.ruleFetchRule(),
+        (a) => a.ruleFetchVerbatimText(),
+        (a) => a.ruleFetchNumberLiteral(),
+        (a) => a.ruleFetchCharCaptureGroup(),
+        (a) => a.ruleFetchMultiStar(args),
+        (a) => a.ruleFetchMultiQM(args)
+    )(source);
+}
+/+
 Token getToken(InputSource source, Attribute[] args) {
     Token token;
     source.consumeWS();
@@ -22,7 +38,7 @@ Token getToken(InputSource source, Attribute[] args) {
         () => Token(branch.ruleFetchWildCard()),
         () => Token(branch.ruleFetchGroup(args)),
         () => Token(branch.ruleFetchRule()),
-        () => Token(branch.ruleFetchStringLiteral()),
+        () => Token(branch.ruleFetchVerbatimText()),
         () => Token(branch.ruleFetchNumberLiteral()),
         () => Token(branch.ruleFetchCharCaptureGroup()),
         () => Token(branch.ruleFetchMultiStar(args)),
@@ -40,7 +56,7 @@ Token getToken(InputSource source, Attribute[] args) {
     Done:
     source.seek = branch.seek;
     return token;
-}
+}// +/
 
 
 CharWildCard ruleFetchWildCard(InputSource source) {
@@ -50,7 +66,7 @@ CharWildCard ruleFetchWildCard(InputSource source) {
 }
 
 
-StringLiteral ruleFetchStringLiteral(InputSource source) {
+VerbatimText ruleFetchVerbatimText(InputSource source) {
     
     source.consumeWS();
     string output;
@@ -70,7 +86,8 @@ StringLiteral ruleFetchStringLiteral(InputSource source) {
             output ~= source.popChar();
         }
     }
-    return StringLiteral(output);
+    if (output == "") throw new Error("");
+    return VerbatimText(output);
 }
 
 
@@ -132,7 +149,7 @@ Attribute ruleFetchProperty(InputSource source, Attribute[] args) {
 
 RuleRef ruleFetchRule(InputSource source) {
     import symtable;
-    return foundCall(lexGName(source));
+    return source.foundCall(lexGName(source));
 }
 
 
@@ -186,14 +203,14 @@ Group ruleFetchGroup(InputSource source, Attribute[] args) {
     
     consumeWS(source);
 
-    RuleRef spaceRule = foundCall("WS");
+    RuleRef spaceRule = source.foundCall("WS");
 
     if (source.current == '~') {
         source.popChar(); consumeWS(source);
         if (source.current == '(') {
             // writeln("fpfgdf");
             source.popChar();
-            spaceRule = foundCall("");
+            spaceRule = source.foundCall("");
         }
         else {
             spaceRule = source.ruleFetchRule();
