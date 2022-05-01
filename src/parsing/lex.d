@@ -18,31 +18,31 @@ void lexGChar(InputSource source, dchar ch) {
 }
 
 
-bool parseComments(InputSource source) {
-    consumeWS(source);
+void parseComments(InputSource source) {
     auto branch = source.save();
-    if (source.front == '/') {
-        source.popFront();
-        if (source.front == '*') {
-            source.popFront();
-            while (1) {
-                if (source.empty) break;
-                parseComments(source);
-                if (source.front() == '*') {
-                    source.popFront;
-                    if (source.front() == '/') {
-                        source.popFront;
-                        break;
-                    } else source.popFront;
-                }
-                else 
-                    source.popFront;
+    if ((){
+        if (branch.front != '/') return false;
+        branch.popFront();
+        if (branch.front != '*') return false;
+        branch.popFront();
+        while (1) {
+            if (branch.empty) break;
+            parseComments(branch);
+            if (branch.front() == '*') {
+                branch.popFront;
+                if (branch.front() == '/') {
+                    branch.popFront;
+                    break;
+                } else branch.popFront;
             }
-            return true;
+            else 
+                branch.popFront;
         }
-        else source.load(branch);
+        return true;
+    }()) {
+        source.load(branch);
     }
-    return false;
+    else {}
 }
 
 

@@ -122,14 +122,9 @@ Declaration[] parseGrammar(InputSource source) {
                 (a) => a.parseG!DeclarationSum,
                 (a) => a.parseG!DeclarationStruct
             );
-            // try {
-            //     grammar ~= source.branch.parseG!DeclarationSum();
-            // }
-            // catch(BadParse) {
-            //     grammar ~= source.branch.parseG!DeclarationStruct();
-            // }
         }
         source.consumeWS();
+        writeln("--------------", source.tell);
     }
     
     foreach (item; [
