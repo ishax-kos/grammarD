@@ -13,25 +13,27 @@ import std.conv;
 T parseG(T:DeclarationStruct)(InputSource source) {
     import parsing.grules;
     DeclarationStruct rule = new DeclarationStruct;
+    
     rule.name = lexGName(source);
 
     
     consumeWS(source);
-    if (source.current == '{') {
+
+    if (source.front == '{') {
         rule.members = lexGTypeArgs(source);
     }
     
     consumeWS(source);
-    if (source.current != '=') {
-        throw new BadParse("No equal sign.");
+
+    if (source.front != '=') {
+        throw new BadParse("No equal sign", source);
     }
-    source.popChar();
+    source.popFront();
     
+    consumeWS(source);
+
     rule.ruleBody = source.ruleFetchGroup(rule.members);
-    
-    
     source.foundDef(rule);
-    
     return rule;
 }
 
@@ -43,37 +45,29 @@ T parseG(T:DeclarationSum)(InputSource source) {
 
 
     consumeWS(source);
-    if (source.current != ':') {
-        throw new BadParse("No colon.");
-    }
-    source.popChar;
-    consumeWS(source);
-    if (source.current == '{') {
-        source.popChar;
+    if (source.front != ':') {
+        throw new BadParse("No colon", source);
+    } else {
+        source.popFront;
         consumeWS(source);
-        if (source.current == '}') {
-            source.popChar;
-        }
-        else while (true) {
-            rule.types ~= source.ruleFetchRule();
-            consumeWS(source);
-            if (source.current == ',') {
-                source.popChar;
-            }
-            else {
-                if (source.current == '}') {
-                    source.popChar;
-                    break;
-                }
-                else {
-                    throw new BadParse("Unclosed type list.");
-                }
-            }
-        }
     }
-    else {
-        throw new BadParse("No open bracket.");
+    // if (source.front == '{') {
+    //     source.popFront;
+    //     consumeWS(source);
+    //     if (source.front == '}') {
+    //         source.popFront;
+    //     }
+        // else 
+    while (source.front == '|') {
+        source.popFront;
+        consumeWS(source);
+        rule.types ~= source.ruleFetchRule();
+        consumeWS(source);
     }
+    // }
+    // else {
+    //     throw new BadParse("No open bracket.");
+    // }
     return rule;
 }// +/
 
@@ -84,22 +78,23 @@ Attribute[] lexGTypeArgs(InputSource source) {
     Attribute[] output;
     {
         source.consumeWS();
-        char c = source.popChar();
+        dchar c = source.front;
+        source.popFront();
         if (c == '{') {}
-        else throw new BadParse(format!"%s, %s"(c, source.seek));
+        else throw new BadParse(format!"%s, %s"(c, source.tell));
     }
     source.consumeWS();
     
-    if (source.current == '}') {
-        source.popChar();
+    if (source.front == '}') {
+        source.popFront();
     } 
     else while (true) {
-        output ~= Attribute(
-            source.foundCall(lexGType(source)),
-            lexGName(source));
+        Attribute attr = lexAttribute(source);
+        output ~= attr;
 
         source.consumeWS();
-        char c = source.popChar;
+        dchar c = source.front;
+        source.popFront;
         if (c == ',') {
             source.consumeWS();
         }
@@ -118,12 +113,12 @@ Declaration[] parseGrammar(InputSource source) {
     source.foundDef(new EmptyRule());
     Declaration[] grammar;
     source.consumeWS();
-    while (!source.end()) {
-        if (source.current == '/') {
+    while (!source.empty()) {
+        if (source.front == '/') {
             source.parseComments();
         }
         else {
-            source.tryAll!(Declaration,
+            grammar ~= source.tryAll!(Declaration,
                 (a) => a.parseG!DeclarationSum,
                 (a) => a.parseG!DeclarationStruct
             );
@@ -151,7 +146,6 @@ Declaration[] parseGrammar(InputSource source) {
     foreach (key, entry; source.table) {
         if (entry is null) throw new Error("\""~key~"\" is not declared!");
     }
-    
     return grammar;
 }
 
@@ -224,15 +218,22 @@ DeclarationStruct defaultStringLiteral() {
     return r;
 }
 
-
+// /+
 unittest {
+
 // pragma(msg,{
 
     import std.stdio;
-    pragma(msg,"---- Unittest ", __FILE__, " ----");
+    writeln("---- Unittest ", __FILE__, " ----");
     string sourceText = import("test/gram/dion.dart");
-    InputSource source = new InputSourceFile("test/gram/dion.dart");
-    parseGrammar(source);
+    InputSource source = new InputSourceString(`
+        Call { Expression caller, []Expression args} = (
+            caller "(" ?( args *("," args) ) ")"
+        )
+    `);
+    // writeln(parseGrammar(source));
+    source.consumeWS();
+    writeln(parseG!DeclarationStruct(source));
 
     // return "source.table";
 
@@ -241,3 +242,4 @@ unittest {
 
     
 }
+// +/

@@ -1,7 +1,6 @@
 module nodes;
 
 import input;
-
 public import std.sumtype;
 // alias RuleBody = string;
 
@@ -36,6 +35,9 @@ struct RuleRef {
         if (v is null) return index;
         else return v.name;
     }
+    string toString() {
+        return "RuleRef(" ~ index ~ ")";
+    }
 }
 struct VerbatimText {string str;}
 struct ___CharCaptureGroup {
@@ -58,36 +60,38 @@ struct ___CharCaptureGroup {
 
 
 struct CharCaptureGroup {
-    private
-    char[] _options;
+    string options;
+    CharRange range() {return CharRange(options);}
+}
+struct CharRange {
+    char[] options;
 
-    this(string options) {
-        _options = options.dup;
+    this(string opt) {
+        options = opt.dup;
     }
 
-    bool empty() {return _options == "";}
-    dchar front() {return _options[0];}
+    bool empty() {return options == "";}
+    char front() {return options[0];}
     void popFront() {
-        if (_options.length >= 4) {
-            if (_options[1..3] == "..") {
-                if (_options[0] >= _options[3]) {
-                    _options = _options[4..$]; return;
+        if (options.length >= 4) {
+            if (options[1..3] == "..") {
+                if (options[0] >= options[3]) {
+                    options = options[4..$]; return;
                 }
                 else {
-                    _options[0]+=1; return;
+                    options[0]+=1; return;
                 }
             }
         }
-        _options = _options[1..$];
+        options = options[1..$];
         return;
     }
 }
 
-
 unittest
 {
     import std.stdio;
-    foreach (c; CharCaptureGroup("A..Za..z0..9_")) {
+    foreach (c; CharCaptureGroup("A..Za..z0..9_").range) {
         write(c);
     }
     writeln();
@@ -182,6 +186,13 @@ class EmptyRule : Declaration {}
 struct Attribute {
     RuleRef type;
     string name;
+    AttributeType category;
+    
+}
+
+enum AttributeType {
+    Bare,
+    Array,
 }
 
 struct Argument {

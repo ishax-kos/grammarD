@@ -9,6 +9,7 @@ import std.algorithm: map, each, fold, all;
 import std.functional: curry;
 import std.sumtype;
 
+import std.stdio;
 
 struct Line {
     private alias LineSum = SumType!(string, Line[]);
@@ -28,15 +29,15 @@ struct Line {
 }
 
 
-string linesToString(Line[] lines) {
-    static uint indentCount;
+string linesToString(Line[] lines, uint indentCount = 0) {
+    // uint indentCount;
     return lines.map!(
         (Line line) {
             return line.internal.match!(
                 (string str) => " ".replicate(4*indentCount) ~ str,
                 (Line[] lines2) {
                     indentCount++; scope(exit) indentCount--;
-                    return lines2.linesToString();
+                    return lines2.linesToString(indentCount);
                 }
             );
         }
@@ -134,7 +135,9 @@ Line[] codeGenFactory(DeclarationStruct decl) {
         
         lineBlock(
             Line(format!"%s rule = %s();"(decl.name, decl.name)),
+            "",
             codeGenGroup(decl.ruleBody),
+            "",
             Line("return rule;")
         ),
         Line("}")
@@ -175,14 +178,10 @@ Line[] codeGenTypeSum(DeclarationSum decl) {
 }
 
 Line[] codeGenAlternate(Token[] alt, RuleRef spaceRule) {
-    // Token[] alt = group.alts[index];
-    /// Individual token captures
-    return alt.map!((t) =>
-        [Line("codeGenSomeToken(t)")]
-    )().array.join(
-        Line("codeGenRuleRef(spaceRule)")
-    );
-    // return output;
+    return alt[0..$-1].map!((t) =>
+        codeGenSomeToken(t) ~
+        codeGenRuleRef(spaceRule)
+    )().join ~ codeGenSomeToken(alt[$-1]);
 }
 
 
@@ -192,13 +191,19 @@ Line[] codeGenGroup(Group group) {
     }
     else
     if (group.alts.length > 1) {
-        return group.alts.map!( (alt) => [
-            Line("try {"),
+        return [
+            Line("source.tryAll!(typeof(this),"),
             lineBlock(
-                codeGenAlternate(alt, group.spaceRule)
+                group.alts.map!( (alt) => [
+                    Line("(source) {"),
+                    lineBlock(
+                        codeGenAlternate(alt, group.spaceRule)
+                    ),
+                    Line("},"),
+                ]).join
             ),
-            Line("}")
-        ]).join;
+            Line(");")
+        ];
     }
     else {
         throw new CodeGenFailure("A group cannot have zero alternates.");
@@ -206,120 +211,116 @@ Line[] codeGenGroup(Group group) {
 }
 
 
-// Line[] codeGenAttribute(Attribute attr) {  
-//     lines ~= Line(
-//         format!"rule.%s = %s.parse(source);"(
-//             attr.name, 
-//             attr.type.name
-//         );
-// }
+Line[] codeGenAttribute(Attribute attr) {  
+    final switch (attr.category) {
+        case AttributeType.Bare: {
+            return [Line(
+                format!"rule.%s = %s.parse(source);"(
+                    attr.name, 
+                    attr.type.name
+                )
+            )];
+        }
+        case AttributeType.Array:{
+            return [Line(
+                format!"rule.%s ~= %s.parse(source);"(
+                    attr.name, 
+                    attr.type.name
+                )
+            )];
+        }
+    }
+}
 
-// Line[] codeGenRuleRef(RuleRef rule) {
-//     lines ~= Line(rule.name~".parse(source);";
-// }
-
-// Line[] codeGenMultiCapture(MultiCapture mc) {
-//     Line[] lines;
-//     lines ~= Line(format!
-//         "source.parseMultiCapture(%s, %s, (source) {"
-//         (mc.low, mc.high);
-//     { output.indentCount++; scope(exit) output.indentCount--;
-//         output.codeGenSomeToken(mc.token);
-//     }
-//    lines ~= Line("}");
-//     // output;
-// }
-
-// Line[] codeGenVerbatim(VerbatimText vbt) {
-//     lines ~= Line(
-//         "source.parseVerbatim!\""~vbt.str~"\"();";
-// }
-
-// Line[] codeGenSomeToken(Token token) {
-//     token.match!(
-//         (Attribute    a)=>output.codeGenAttribute(a),
-//         (RuleRef      a)=>output.codeGenRuleRef(a),
-//         (MultiCapture a)=>output.codeGenMultiCapture(a),
-//         (VerbatimText a)=>output.codeGenVerbatim(a),
-//         (_) {return assert(false, "'"
-//             ~ typeof(_).stringof
-//             ~ "' is not implemented in the final codegen.");
-//         }
-//     );
-// }
+Line[] codeGenRuleRef(RuleRef rule) {
+    return [Line(rule.name~".parse(source);")];
+}
 
 
+Line[] codeGenMultiCapture(MultiCapture mc) {
+    return [
+        Line(format!"source.parseMultiCapture!(%s, %s, (source) {"
+            (mc.low, mc.high)),
+        lineBlock(
+            codeGenSomeToken(mc.token)
+        ),
+        Line("})();")
+    ];
+}
+
+
+Line[] codeGenVerbatim(VerbatimText vbt) {
+    // import std.string: unes
+    // writeln(vbt);
+    return [
+        Line("parseVerbatim!\""~vbt.str~"\"(source);")
+    ];
+}
+
+
+Line[] codeGenCharCaptureGroup(CharCaptureGroup chCG) {
+    return [Line(format!"parseCharCaptureGroup(source, %s);"(chCG.options ))];
+}
+
+
+Line[] codeGenSomeToken(Token token) {
+    return token.match!(
+        (Attribute    a) => codeGenAttribute(a),
+        (RuleRef      a) => codeGenRuleRef(a),
+        
+        (VerbatimText a) => codeGenVerbatim(a),
+        // (CharCaptureGroup a) => codeGenCharCaptureGroup(a),
+
+        (MultiCapture a) => codeGenMultiCapture(a),
+
+
+        (Group        a) => codeGenGroup(a),
+        (_) {return assert(false, "'"
+            ~ typeof(_).stringof
+            ~ "' is not implemented in the final codegen.");
+        }
+    );
+}
+
+
+
+//+
 unittest {
     import std.stdio;
+    import std.conv;
     writeln("---- Unittest ", __FILE__, " 1 ----");
 
-    import parsing.gstatements;
-    import symtable;
-    InputSource source;
+    auto func(){
+        import parsing.gstatements;
+        import symtable;
+        InputSource source;
+        
+        string sourceText = 
+        `LoremIpsum = (
+            " Lorem Ipsum "
+        )`;
+        // import("test/gram/dion.dart");
+        source = new InputSourceString(sourceText);
+        // source = new InputSourceString("Test : {Bungar, Dungar}");
+        
+        // return source.parseGrammar.to!string;
+        
+        Line[] lines = source.parseGrammar.map!(dec => 
+            codeGenType(dec)
+        ).join;
+        
+        // writeln(lines.linesToString);
+        return lines.linesToString;
+    }
+pragma(msg, ",-,"~__FILE__);
+    // pragma(msg, "...\n" ~ func());
+pragma(msg, ",,,"~__FILE__);
+    // mixin(func());
+    writeln(func());
+}// +/
 
-    // source = new InputSourceString("Bungar {} ");
-    // source.parseG!Declaration;
-    // Output output = new Output();
-    
-    source = new InputSourceString(`
-        LineBreak = ~(
-            "\r\n" | "\r" | "\n"
-        )
-    `);
-    // source = new InputSourceString("Test : {Bungar, Dungar}");
-    
-    
-    auto tree = source.parseG!DeclarationStruct;
-    
-    writeln(tree);
-    
-    Line[] lines = codeGenType(tree);
-    
-    writeln(lines);
-    writeln(lines.linesToString);
-}
-// unittest {
-//     import std.stdio;
-//     writeln("---- Unittest ", __FILE__, " 2 ----");
 
-//     import parsing.gstatements;
-//     import symtable;
-//     InputSource source;
 
-//     // Output output = new Output();
-//     // source = new InputSourceString("Bungar {} ");
-//     // source.parseG!Declaration;
-
-//     // pragma (msg,
-//     enum mod = (){
-//         InputSource src = new InputSourceString(`
-//             Foo {} = (
-//                 *0"+-="
-//             )
-
-//             LoremIpsum {Foo feh} = (
-//                 " Lorem Ipsum " feh
-//             )
-
-//         `);
-//         Output output = new Output();
-
-//        lines ~= Line("import parserhelpers;");
-
-//         [
-//             src.parseG!Declaration,
-//             src.parseG!Declaration
-//         ].map!(e => output.codeGenType(e));
-//         string res = output.toString;
-//         // writeln(res);
-//         return res;
-//     }();
-//     pragma(msg, mod);
-//     mixin(mod);
-//     source = new InputSourceString(" Lorem Ipsum +-=");
-    
-//     writeln(LoremIpsum.parse(source));
-// }
 
 
 /+ Note to self: When rules without arguments are themselves
