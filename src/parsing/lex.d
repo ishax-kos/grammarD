@@ -1,15 +1,17 @@
 module parsing.lex;
 
 import input;
+import nodes;
 
 import std.ascii;
 import std.conv;
+public import parserhelpers;
 
 
-void lexGChar(InputSource source, char ch) {
+void lexGChar(InputSource source, dchar ch) {
     consumeWS(source);
-    if (source.current == ch) {
-        source.popChar();
+    if (source.front == ch) {
+        source.popFront();
     }
     else throw new BadParse("");
 }
@@ -17,30 +19,35 @@ void lexGChar(InputSource source, char ch) {
 
 bool parseComments(InputSource source) {
     consumeWS(source);
-    if (source.current == '/') {
-        source.popChar();
-        if (source.current == '*') {
-            source.popChar();
+    auto branch = source.save();
+    if (source.front == '/') {
+        source.popFront();
+        if (source.front == '*') {
+            source.popFront();
             while (1) {
-                if (source.end) break;
+                if (source.empty) break;
                 parseComments(source);
-                if (source.popChar() == '*') {
-                    if (source.popChar() == '/') {
+                if (source.front() == '*') {
+                    source.popFront;
+                    if (source.front() == '/') {
+                        source.popFront;
                         break;
-                    }
+                    } else source.popFront;
                 }
+                else 
+                    source.popFront;
             }
             return true;
         }
-        else source.seek(source.seek-1);
+        else source.load(branch);
     }
     return false;
 }
 
 
 void consumeWS(InputSource source) {
-    while (source.current.isWhite()) {
-        source.popChar();
+    while (source.front.isWhite()) {
+        source.popFront();
     }
 }
 
@@ -50,20 +57,20 @@ string lexGName(InputSource source) {
     string output;
     source.consumeWS();
     {
-        if (source.current.isAlpha)
-            output ~= source.current;
+        if (source.front.isAlpha)
+            output ~= source.front;
         else {
-            // writeln("(",source.current,")",source.seek);
-            throw new BadParse(source.seek.to!string);
+            // writeln("(",source.front,")",source.seek);
+            throw new BadParse(source.tell.to!string);
         }
-        source.popChar();
+        source.popFront();
     }
     
     while (true) {
-        char c = source.current;
+        dchar c = source.front;
         if (c.isAlphaNum || c == '_') {
             output ~= c;
-            source.popChar();
+            source.popFront();
         }
         else break;
     }
@@ -71,67 +78,32 @@ string lexGName(InputSource source) {
 }
 
 
-string lexGType(InputSource source) {
-    string name;
+Attribute lexAttribute(InputSource source) {
+    Attribute attr;
     import std.conv;
+    import symtable;
 
     source.consumeWS();
-    if (source.current == '[') {
-        source.popChar(); source.consumeWS();
-        if (source.current != ']')
-            throw new BadParse(source.seek.to!string);
-        else
-            source.popChar(); source.consumeWS();
-    }
-    // while (true) {
-    //     source.consumeWS();
-    //     if (source.current != '[') break;
-    //     source.popChar();
-    //     source.consumeWS();
-    //     if (source.popChar() != ']')
-    //         throw new BadParse("");
-    //     name ~= "[]";
-    // }
-
-    name ~= lexGName(source);
-    
-
-    return name;
-}
-
-
-class BadParse : Exception {
-    this(string msg, string file = __FILE__, size_t line = __LINE__) {
-        super(msg, file, line);
-    }
-}
-
-
-import std.traits;
-import std.meta;
-pragma(inline)
-T tryAll(T, C...)(InputSource source)
-// if (is(C : T delegate(InputSource))) 
-{
-    import std.format;
-    import std.stdio;
-
-    consumeWS(source);
-    T output;
-    InputSource branch = source;
-    Exception[] earr;
-
-    static foreach (expr; C) {
-        try {
-            branch = source.branch();
-            output = cast(T) expr(branch);
-            goto Done;
+    if (source.front == '[') {
+        source.popFront(); source.consumeWS();
+        if (source.front != ']')
+            throw new BadParse(source.tell.to!string);
+        else {
+            source.popFront(); source.consumeWS();
+            attr.category = AttributeType.Array;
         }
-        catch (BadParse e) earr~=e;
     }
-    throw new Error(earr.format!"%(%s\n\n%)\n\nFinal Error Stack");
+    else {
+        attr.category = AttributeType.Bare;
+    }
 
-    Done:
-    source.seek = branch.seek;
-    return output;
+    attr.type = source.foundCall(lexGName(source));
+    attr.name = lexGName(source);
+
+    return attr;
 }
+
+
+
+
+pragma(msg, ",,,"~__FILE__);

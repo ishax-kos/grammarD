@@ -8,34 +8,56 @@ import std.sumtype;
 abstract
 class InputSource {
     Declaration[string] table;
-    // abstract {
-    char popChar();
-    bool end();
-    @property ulong seek();
-    @property void seek(ulong);
-    char current();
-    ulong size();
-    InputSource branch();
-    // }
+    size_t line = 0;
+    size_t lineStart = 0;
+    size_t utfPos = 0;
+
+    size_t col() {
+        return tell - lineStart;
+    }
+    abstract {
+        InputSource save();
+        void popFront();
+        dchar front();
+        bool empty();
+        size_t length();
+        size_t tell();
+        void load(InputSource);
+    }
 }
 
-void seekRel(InputSource source, long offset) {
-    long pos = (source.seek + offset);
-    assert(pos >= 0 && pos < source.size);
-    source.seek = pos;
+
+void inputSourceCopy(T)(T input, T output) {
+    import std.range;
+    output.tupleof = input.tupleof;
+    foreach(i, attr; input.tupleof) {
+        alias A = typeof(attr);
+        static if (isForwardRange!A) {
+            output.tupleof[i] = attr.save;
+        }
+    }
 }
 
+
+//+
 class InputSourceString : InputSource {
+    import std.utf;
+    enum NO = UseReplacementDchar.no;
 
     this(string text) {
         str = text;
     }
-    
-    override InputSource branch() {
-        auto iss = new InputSourceString(str);
-        iss.seek = this.seek;
-        return iss;
+
+    override void load(InputSource src) {
+        inputSourceCopy(this, cast(typeof(this)) src);
     }
+
+    override InputSource save() {
+        auto ret = new typeof(this)("");
+        inputSourceCopy(this, ret);
+        return ret;
+    }
+
 
     static fromFile(string path) {
         import std.stdio : File;
@@ -46,100 +68,139 @@ class InputSourceString : InputSource {
         return new InputSourceString(cast(string) buffer);
     }
 
-    override ulong seek() {
-        return _seek;
+
+    override void popFront() {
+        utfPos+=1;
+        if (front == '\n') {
+            line += 1;
+            lineStart = utfPos;
+        }
+        pos += str[pos..$].stride;
     }
 
-    override void seek(ulong set) {
-        assert(set <= str.length);
-        _seek = set;
+    override dchar front() {
+        return range.front;
     }
 
-    override char popChar() {
-        if (end())
-            return 0;
-        else
-            return str[_seek++];
+    override bool empty() {
+        return range.empty;
     }
 
-    override bool end() {
-        return _seek >= size;
-    }
-
-    override char current() {
-        if (end())
-            return 0;
-        else
-            return str[_seek];
-    }
-
-    override ulong size() {
+    override ulong length() {
         return str.length;
     }
 
-    // ref Declaration[string] table() {return _table;}
+    override size_t tell() {return pos;}
 
     private {
-        ulong _seek = 0;
+        ulong pos = 0;
         string str = "";
-        // Declaration[string] _table;
+        auto range() {return str[pos..$].byUTF!(dchar, NO);} 
     }
 }
 
-//+
+
+// +/
 class InputSourceFile : InputSource {
-    import std.mmfile;
+    import std.utf;
+    enum NO = UseReplacementDchar.no;
 
     this(string path) {
-        file = new MmFile(path);
+        file = FileRange!char(path);
     }
 
-    this(MmFile file, ulong seek) {
-        this.file = file;
-        this.seek = seek;
+    private this () {}
+
+
+    override void load(InputSource src) {
+        inputSourceCopy(this, cast(typeof(this)) src);
     }
 
-    override InputSource branch() {
-        return new InputSourceFile(file, seek);
+    override InputSource save() {
+        auto ret = new typeof(this);
+        inputSourceCopy(this, ret);
+        return ret;
     }
 
-    override ulong seek() {
-        return _seek;
+
+    override void popFront() {
+        utfPos += 1;
+        if (front == '\n') {
+            line += 1;
+            lineStart = utfPos;
+        }
+        file.pos += file.stride;
+
+        //  += str[pos..$].stride;
+        // range.popFront;
     }
 
-    override void seek(ulong set) {
-        assert(set <= file.length);
-        _seek = set;
+    override dchar front() {
+        return range.front;
     }
 
-    override char popChar() {
-        if (end())
-            return 0;
-        else
-            return file[_seek++];
+    override bool empty() {
+        return range.empty;
     }
 
-    override bool end() {
-        return _seek >= size;
-    }
-
-    override char current() {
-        if (end())
-            return 0;
-        else
-            return file[_seek];
-    }
-
-    override ulong size() {
+    override size_t length() {
         return file.length;
     }
-
-    // ref Declaration[string] table() {return _table;}
+    
+    override size_t tell() {return file.pos;}
 
     private {
-        ulong _seek = 0;
-        MmFile file;
-        // Declaration[string] _table;
+        private FileRange!char file;
+        auto range() {return file.byUTF!(dchar, NO);}
     }
 }
-//+/
+// +/
+
+struct FileRange(T) {
+    import std.mmfile;
+    MmFile file;
+    size_t pos;
+    
+    this(string path) {
+    	file = new MmFile(path);
+    }
+    
+    T front() {
+        return
+            (cast(T[]) (file[ pos .. (pos + T.sizeof)])) [0];
+    }
+    void popFront() {
+        pos += T.sizeof;
+    }
+    
+    bool empty() {
+        return (pos+1)*T.sizeof > file.length;
+    }
+
+    size_t length() {return file.length;}
+
+    typeof(this) save() {
+        return this;
+    }
+}
+
+unittest {
+    import std.range;
+    import std.stdio;
+    // import std.mmfile;
+    writeln("---- Unittest ", __FILE__, " ----");
+    import std.utf;
+
+
+    InputSourceString s1 = new InputSourceString("linkリンク");
+    // InputSource s1 = new InputSourceFile("test/langsrc/text.txt");
+    // auto s1 = FileRange!char("test/langsrc/text.txt");
+    // string s1 = "linkリンク";
+    s1.popFront;
+    auto s2 = s1.save;
+    s1.popFront;
+    s1.popFront;
+    s1.popFront;
+    writeln(s1.front);
+    writeln(s2.front);
+}

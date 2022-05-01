@@ -22,46 +22,15 @@ Token getToken(InputSource source, Attribute[] args) {
         (a) => a.ruleFetchNumberLiteral(),
         (a) => a.ruleFetchCharCaptureGroup(),
         (a) => a.ruleFetchMultiStar(args),
-        (a) => a.ruleFetchMultiQM(args)
+        (a) => a.ruleFetchMultiQM(args),
     )(source);
 }
-/+
-Token getToken(InputSource source, Attribute[] args) {
-    Token token;
-    source.consumeWS();
-    typeof(source) branch = source;
-    Exception[] earr;
-    // bool done;
-
-    static foreach (expr; [
-        () => Token(branch.ruleFetchProperty(args)),
-        () => Token(branch.ruleFetchWildCard()),
-        () => Token(branch.ruleFetchGroup(args)),
-        () => Token(branch.ruleFetchRule()),
-        () => Token(branch.ruleFetchVerbatimText()),
-        () => Token(branch.ruleFetchNumberLiteral()),
-        () => Token(branch.ruleFetchCharCaptureGroup()),
-        () => Token(branch.ruleFetchMultiStar(args)),
-        () => Token(branch.ruleFetchMultiQM(args))
-    ]) {
-        try {
-            branch = source.branch();
-            token = expr();
-            goto Done;
-        }
-        catch (BadParse e) earr~=e;
-    }
-    throw new Error(earr.format!"%(%s\n\n%)\n\nFinal Error Stack");
-
-    Done:
-    source.seek = branch.seek;
-    return token;
-}// +/
 
 
 CharWildCard ruleFetchWildCard(InputSource source) {
     source.consumeWS();
-    if (source.popChar() != '.') throw new BadParse("");
+    if (source.front() != '.') throw new BadParse("");
+    source.popFront;
     return CharWildCard();
 }
 
@@ -70,21 +39,21 @@ VerbatimText ruleFetchVerbatimText(InputSource source) {
     
     source.consumeWS();
     string output;
-    if (source.popChar != '"')
-        throw new BadParse("\" not found. Found "~source.current~" instead.");
+    if (source.front != '"')
+        throw new BadParse(format!"\" not found. Found %s instead."(source.front));
+    else 
+        source.popFront;
     while (true) {
-        if (source.current() == '\\') {
-            source.popChar();
-            if (source.current() == '"')
-                output ~= source.popChar();
+        if (source.front() == '\\') {
+            output ~= source.front(); source.popFront();
         }
         else {
-            if (source.current() == '"') {
-                source.popChar();
+            if (source.front() == '"') {
+                source.popFront();
                 break;
             }
-            output ~= source.popChar();
         }
+        output ~= source.front(); source.popFront();
     }
     if (output == "") throw new Error("");
     return VerbatimText(output);
@@ -92,27 +61,33 @@ VerbatimText ruleFetchVerbatimText(InputSource source) {
 
 
 CharCaptureGroup ruleFetchCharCaptureGroup(InputSource source) {
-    
     source.consumeWS();
-    string chars;
-    if (source.popChar != '\'')
-        throw new BadParse("\' not found. Found "~source.current~" instead.");
+    char[] chars;
+    if (source.front != '\'') {
+        throw new BadParse(format!"\" not found. Found %s instead."(source.front));
+    }
+    source.popFront;
     while (true) {
-        if (source.current() == '\\') {
-            source.popChar();
-            if (source.current() == '\'')
-                chars ~= source.popChar();
+        if (source.front() == '\\') {
+            chars ~= source.front(); source.popFront();
+            if (source.front() == '\'')
+                chars ~= source.front(); source.popFront();
         }
         else {
-            if (source.current() == '\'') {
-                source.popChar();
+            if (source.front() == '\'') {
+                source.popFront();
                 break;
             }
-            chars ~= source.popChar();
+            chars ~= source.front(); source.popFront();
         }
     }
-    return CharCaptureGroup(chars);
+    // char[][] charClusters = chars.split("..");
+    // foreach (i; 0..charClusters.length-1) {
+    //     CharRange(charClusters[i][$-1], charClusters[i+1][0]);
+    // }
+    return CharCaptureGroup(chars.idup);
 }
+
 
 
 NumberLiteral ruleFetchNumberLiteral(InputSource source) {
@@ -121,14 +96,18 @@ NumberLiteral ruleFetchNumberLiteral(InputSource source) {
     import std.conv : parse;
     source.consumeWS();
     string output;
-    if (source.current.isDigit)
-        output ~= source.popChar();
+    if (source.front.isDigit) {
+        output ~= source.front(); 
+        source.popFront();
+    }
     else throw new BadParse("not a numeric literal");
 
     while (true) {
-        if (source.current.isDigit)
-            output ~= source.popChar();
-        else if (source.current == '_') {}
+        if (source.front.isDigit) {
+            output ~= source.front(); 
+            source.popFront();
+        }
+        else if (source.front == '_') {}
         else break;
     }
     return NumberLiteral(output.parse!uint);
@@ -156,7 +135,8 @@ RuleRef ruleFetchRule(InputSource source) {
 MultiCapture ruleFetchMultiStar(InputSource source, Attribute[] args) {
     
     consumeWS(source);
-    if (source.popChar != '*') throw new BadParse("");
+    if (source.front != '*') throw new BadParse("");
+    source.popFront;
     MultiCapture mc = new MultiCapture();
 
     try {mc.low  = ruleFetchNumberLiteral(source).num;}
@@ -164,7 +144,7 @@ MultiCapture ruleFetchMultiStar(InputSource source, Attribute[] args) {
 
     try {mc.high = ruleFetchNumberLiteral(source).num;}
     catch(BadParse) {mc.high = 0;}
-    
+    consumeWS(source);
     mc.token = getToken(source, args);
 
     return mc;
@@ -174,9 +154,11 @@ MultiCapture ruleFetchMultiStar(InputSource source, Attribute[] args) {
 MultiCapture ruleFetchMultiQM(InputSource source, Attribute[] args) {
     
     consumeWS(source);
-    if (source.popChar != '?') throw new BadParse("");
+    if (source.front != '?') throw new BadParse("");
+    source.popFront;
     MultiCapture mc = new MultiCapture();
     mc.high = 1;
+    consumeWS(source);
     mc.token = getToken(source, args);
     return mc;
 }
@@ -187,11 +169,15 @@ string ruleFetchSymbol(InputSource source, string[] symbols) {
     source.consumeWS();
   
     CONT: foreach (symbol; symbols) {
-        auto branch = source.branch();
+        auto branch = source.save();
         foreach (symbolChar; symbol) {
-            if (branch.popChar() != symbolChar) continue CONT;
+            if (branch.front() != symbolChar) {
+                source.popFront;
+                continue CONT;
+            }
+            else source.popFront;
         }
-        source.seek = branch.seek;
+        source.load(branch);
         return symbol;
     }
     throw new BadParse("");
@@ -205,19 +191,21 @@ Group ruleFetchGroup(InputSource source, Attribute[] args) {
 
     RuleRef spaceRule = source.foundCall("WS");
 
-    if (source.current == '~') {
-        source.popChar(); consumeWS(source);
-        if (source.current == '(') {
+    if (source.front == '~') {
+        source.popFront(); consumeWS(source);
+        if (source.front == '(') {
             // writeln("fpfgdf");
-            source.popChar();
+            source.popFront();
             spaceRule = source.foundCall("");
         }
         else {
             spaceRule = source.ruleFetchRule();
-            if (source.popChar() != '(') throw new BadParse("");
+            if (source.front() != '(') throw new BadParse("");
+            else source.popFront;
         }
     }
-    else if (source.popChar() != '(') throw new BadParse("");
+    else if (source.front() != '(') throw new BadParse("");
+    else source.popFront;
 
     Token[][] alternates;
     Token[] group;
@@ -226,15 +214,15 @@ Group ruleFetchGroup(InputSource source, Attribute[] args) {
             // if (source.ruleFetchParentheses() == Parentheses.closed)
             //     break;
             // else throw new BadParse("");
-        if (source.current == ')') {
+        if (source.front == ')') {
             alternates ~= group;
-            source.popChar;
+            source.popFront;
             break;
         }
         else
-        if (source.current == '|') {
+        if (source.front == '|') {
             alternates ~= group;
-            source.popChar;
+            source.popFront;
             group = [];
         }
         else {group ~= getToken(source, args);}
@@ -246,13 +234,6 @@ Group ruleFetchGroup(InputSource source, Attribute[] args) {
     return g;
 }
 
-
-unittest
-{
-    auto source = new InputSourceString(`_`);
-    assert(source.current == source.popChar());
-    assert(source.current == source.popChar());
-}
 
 unittest
 {

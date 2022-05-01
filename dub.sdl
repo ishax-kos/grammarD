@@ -4,5 +4,4 @@ authors "Isaac"
 copyright "Copyright © 2022, Isaac"
 license "proprietary"
 targetType "library"
-
 dflags "-J=."
