@@ -9,7 +9,6 @@ public import parserhelpers;
 
 import std.stdio;
 
-
 void lexGChar(InputSource source, dchar ch) {
     consumeWS(source);
     if (source.front == ch) {

@@ -295,11 +295,7 @@ unittest {
         import symtable;
         InputSource source;
         
-        string sourceText = 
-        `LoremIpsum = (
-            " Lorem Ipsum "
-        )`;
-        // import("test/gram/dion.dart");
+        string sourceText = import("test/gram/dion.dart");
         source = new InputSourceString(sourceText);
         // source = new InputSourceString("Test : {Bungar, Dungar}");
         
