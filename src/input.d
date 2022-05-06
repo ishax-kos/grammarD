@@ -23,20 +23,10 @@ class InputSource {
         size_t length();
         size_t tell();
         void load(InputSource);
+        bool sharesWith(InputSource);
     }
 }
 
-
-void inputSourceCopy(T)(T input, T output) {
-    import std.range;
-    output.tupleof = input.tupleof;
-    foreach(i, attr; input.tupleof) {
-        alias A = typeof(attr);
-        static if (isForwardRange!A) {
-            output.tupleof[i] = attr.save;
-        }
-    }
-}
 
 
 //+
@@ -49,13 +39,26 @@ class InputSourceString : InputSource {
         // range = byUTF(str);
     }
 
+
+    override bool sharesWith(InputSource other) {
+        auto oth = cast(InputSourceString) other;
+        assert(oth !is null);
+        return (
+            this.str.ptr + this.str.length 
+            == oth.str.ptr + oth.str.length
+            );
+    }
+
+
     override void load(InputSource src) {
-        inputSourceCopy(cast(typeof(this)) src, this);
+        this.tupleof = (cast(typeof(this)) src).tupleof;
+        this.table = src.table.dup;
     }
 
     override InputSource save() {
         auto ret = new typeof(this)("");
-        inputSourceCopy(this, ret);
+        ret.tupleof = this.tupleof;
+        ret.table = this.table.dup;
         return ret;
     }
 

@@ -15,8 +15,7 @@ import nodes;
 //     return new T();
 // }
 
-void parseMultiCapture
-(uint min, uint max, void function(InputSource) lam)
+void parseMultiCapture(uint min, uint max, alias lambda)
 (InputSource source) {
     ulong n = 0;
     
@@ -25,7 +24,7 @@ void parseMultiCapture
             if (n >= max) {break;}
         }
         try {
-            lam(source);
+            lambda(source);
             n += 1;
         }
         catch(BadParse bp) {break;}
@@ -37,21 +36,11 @@ void parseMultiCapture
     }
 }
 
-pragma(inline, true)
-void parseCharCaptureGroup(CharCaptureGroup ccg)(InputSource source) {
-    foreach(ch; ccg.options) {
-        if (source.current == ch) {
-            source.popChar;
-            break;
-        }
-    }
-}
-
 
 void parseVerbatim(string str)(InputSource source) {
     foreach (ch; str) {
-        if (source.current != ch) {throw new BadParse("");}
-        else {source.popChar;}
+        if (source.front != ch) {throw new BadParse("");}
+        else {source.popFront;}
     }
 }
 
@@ -62,26 +51,36 @@ T tryAll(T, C...)(InputSource source) {
     import std.stdio;
 
     // wsCallback(source);
-    T output;
+    // T output;
     InputSource branch;
     Exception[] earr;
 
+    scope(exit) source.load(branch);
     static foreach (expr; C) {
         branch = source.save();
         try {
-            output = cast(T) expr(branch);
-            goto Done;
+            return cast(T) expr(branch);
         }
         catch (BadParse e) earr~=e;
     }
     throw new Error(earr.format!"%(%s\n\n%)\n\nFinal Error Stack");
 
-    Done:
-    source.load(branch);
-    return output;
+    // return output;
 }
 
 
+string parseSince(InputSource current, InputSource start) {
+    assert(current.sharesWith(start));
+    import std.range: take;
+    import std.algorithm: each;
+    ulong len = current.tell - start.tell;
+    string ret;
+    ret.reserve = len*2;
+    foreach (dch; start.take(len)) {
+        ret ~= dch;
+    }
+    return ret;
+}
 
 
 class BadParse : Exception {

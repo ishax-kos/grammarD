@@ -12,14 +12,13 @@ import std.format;
 
 
 Token getToken(InputSource source, Attribute[] args) {
-    import std.functional;
     return tryAll!(Token, 
         (a) => a.ruleFetchProperty(args),
         (a) => a.ruleFetchWildCard(),
         (a) => a.ruleFetchGroup(args),
         (a) => a.ruleFetchRule(),
         (a) => a.ruleFetchVerbatimText(),
-        (a) => a.ruleFetchNumberLiteral(),
+        // (a) => a.ruleFetchNumberLiteral(),
         (a) => a.ruleFetchCharCaptureGroup(),
         (a) => a.ruleFetchMultiStar(args),
         (a) => a.ruleFetchMultiQM(args),
@@ -37,8 +36,6 @@ CharWildCard ruleFetchWildCard(InputSource source) {
 
 
 VerbatimText ruleFetchVerbatimText(InputSource source) {
-    uint _ = 0;
-    // source.consumeWS();
     string output;
     if (source.front != '"')
         throw new BadParse(
@@ -51,6 +48,11 @@ VerbatimText ruleFetchVerbatimText(InputSource source) {
         if (source.front() == '\\') {
             output ~= source.front(); 
             source.popFront();
+            if (source.front() == '\"') {
+                output ~= source.front(); 
+                source.popFront();
+            }
+            // throw cast(Exception) new BadParse("found", source);
         }
         else if (source.front() == '"') {
             source.popFront();
@@ -135,7 +137,8 @@ Attribute ruleFetchProperty(InputSource source, Attribute[] args) {
 
 RuleRef ruleFetchRule(InputSource source) {
     import symtable;
-    return source.foundCall(lexGName(source));
+    string n = lexGName(source);
+    return source.foundCall(n);
 }
 
 
@@ -236,7 +239,7 @@ unittest
     writeln("---- Unittest ", __FILE__, " ----");
     // auto source = new InputSourceString(`"foobar"`);
     auto source = new InputSourceString(`
-        foo . (bar) WS "baz" 6 'abc' *alpha ?beta
+        foo . (bar) WS "baz" 'abc' *alpha ?beta
     `);
     void writeln(T)(T val) {}
     Attribute[] args = [Attribute(RuleRef(), "foo")];
@@ -253,9 +256,6 @@ unittest
     assert(source.front == '"');
     writeln(source.ruleFetchVerbatimText());
     consumeWS(source);
-    assert(source.front == '6');
-    writeln(source.ruleFetchNumberLiteral());
-    consumeWS(source);
     assert(source.front == '\'');
     writeln(source.ruleFetchCharCaptureGroup());
     consumeWS(source);
@@ -270,7 +270,7 @@ unittest
     writeln("...");
 
     source = new InputSourceString(`
-        foo . (bar) WS "baz" 6 'abc' *alpha ?beta
+        foo . (bar) WS "baz" 'abc' *alpha ?beta
     `);
     consumeWS(source);
     while (!source.empty) {

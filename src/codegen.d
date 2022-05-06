@@ -45,19 +45,22 @@ string linesToString(Line[] lines, uint indentCount = 0) {
 }
 
 import std.range;
-Line lineBlock(T)(T lines) {
-    Line line;
+Line[] lineList(T)(T lines) {
     static if (is(ElementType!T == Line)) {
-        line.internal = Line.LineSum(lines);
+        return lines.array;
     }
     static if (is(ElementType!T == string)) {
-        line.internal = Line.LineSum(lines.map!(a=>Line(a)).array);
+        return lines.map!(a=>Line(a)).array;
     }
+}
+
+Line lineBlock(T)(T lines) {
+    Line line;
+    line.internal = Line.LineSum(lineList(lines));
     return line;
 }
 
-Line lineBlock(T...)(T items) {
-    Line line;
+Line[] lineList(T...)(T items) {
     Line[] lines;
     foreach (item; items) {
         alias T = typeof(item);
@@ -69,7 +72,12 @@ Line lineBlock(T...)(T items) {
             lines ~= Line(item);
         }
     }
-    line.internal = Line.LineSum(lines);
+    return lines;
+}
+
+Line lineBlock(T...)(T items) {
+    Line line;
+    line.internal = Line.LineSum(lineList(items));
     return line;
 }
 
@@ -103,59 +111,85 @@ Line[] codeGenType(Declaration decl) {
 
 Line[] codeGenTypeStruct(DeclarationStruct decl) {
     import std.stdio;
-    // Line[] lines;
+    bool isBasic = (decl.members.length == 0);
     return [
         Line(format!"struct %s {"(decl.name)),
         lineBlock(
             () {
-                if (decl.members.length == 0) {
-                    return [Line("string capture = \"\";")];
+                if (isBasic) {
+                    return [
+                        Line(q{string capture = "";}),
+                        // Line(q{alias capture this;})    
+                    ];
                 }
                 else {
                     return decl.members.map!((Attribute attr) {
+                        string fstr = attr.category == AttributeType.Array
+                            ? "%s[] %s;"
+                            : "%s %s;";
                         string typeName = attr.type.name;
-                        return Line(format!"%s %s;"(
+                        return Line(format(fstr,
                             typeName, 
                             attr.name)
                         );
                     }).array;
                 }
-            }() 
-            ~
-            codeGenFactory(decl)
+            }()
         ),
         Line("}")
-    ];
+    ]
+    ~ codeGenFactory(decl);
 }
 
 
 Line[] codeGenFactory(DeclarationStruct decl) {
-    return [
-        Line(format!"static %s parse(InputSource source) {"(decl.name)),
-        
+    bool isBaseLevel = decl.members == [];
+    return lineList(
+        format!"%s _parse%s(InputSource source) {"
+            (decl.name, decl.name),
         lineBlock(
-            Line(format!"%s rule = %s();"(decl.name, decl.name)),
+            Line(format!"alias This = %s;"(decl.name)),
+            codeGenLeftRecursion(),
+            Line("This rule = This();"),
             "",
-            codeGenGroup(decl.ruleBody),
+            (isBaseLevel 
+                ? Line("InputSource start = source.save;")
+                ~ codeGenGroup(decl.ruleBody)
+                ~ Line("rule.capture = source.parseSince(start);")
+                : codeGenGroup(decl.ruleBody)),
             "",
             Line("return rule;")
         ),
         Line("}")
-    ];
+    );
+}
+
+Line[] codeGenLeftRecursion() {
+    return lineList(
+        q{static size_t guard = -1;},
+        q{if (guard == source.tell) throw new BadParse("Left recursion");},
+        q{guard = source.tell; scope(exit) guard = -1;},
+    );
 }
 
 
-// bool isNotSummable(Declaration decl) {
-//     return decl.members.length == 0 
-//     && decl.ruleBody.alts.all!(a => 
-//         a.length == 1 
-//         && a[0].match!(
-//             (RuleRef _) => true,
-//             _ => false
-//         )
-//     ); 
-// }
-
+Line[] codeGenSumFactory(DeclarationSum decl) {
+    return lineList(
+        Line(format!"%s _parse%s(InputSource source) {"
+            (decl.name, decl.name)),
+        lineBlock(
+            codeGenLeftRecursion(),
+            Line("return source.tryAll!("~ decl.name ~","),
+            lineBlock(
+                decl.types.map!(ruleRef =>
+                    "source => _parse" ~ ruleRef.name ~ "(source),"
+                )
+            ),
+            Line(");")
+        ),
+        Line("}")
+    );
+}
 
 class CodeGenFailure: Exception {
     this(string msg, string file = __FILE__, size_t line = __LINE__) {
@@ -174,14 +208,19 @@ Line[] codeGenTypeSum(DeclarationSum decl) {
             ~ decl.types[$-1].name /// last element has no comma
         ),
         Line(");")
-    ];
+    ]
+    ~ codeGenSumFactory(decl);
 }
 
 Line[] codeGenAlternate(Token[] alt, RuleRef spaceRule) {
-    return alt[0..$-1].map!((t) =>
-        codeGenSomeToken(t) ~
-        codeGenRuleRef(spaceRule)
-    )().join ~ codeGenSomeToken(alt[$-1]);
+    Line[] ret;
+    if (!alt.empty) while (true) {
+        ret ~= codeGenSomeToken(alt.front);
+        alt.popFront;
+        if (alt.empty) break;
+        ret ~= codeGenRuleRef(spaceRule);
+    }
+    return ret;
 }
 
 
@@ -192,7 +231,7 @@ Line[] codeGenGroup(Group group) {
     else
     if (group.alts.length > 1) {
         return [
-            Line("source.tryAll!(typeof(this),"),
+            Line("source.tryAll!(void,"),
             lineBlock(
                 group.alts.map!( (alt) => [
                     Line("(source) {"),
@@ -211,35 +250,38 @@ Line[] codeGenGroup(Group group) {
 }
 
 
-Line[] codeGenAttribute(Attribute attr) {  
-    final switch (attr.category) {
-        case AttributeType.Bare: {
-            return [Line(
-                format!"rule.%s = %s.parse(source);"(
-                    attr.name, 
-                    attr.type.name
-                )
-            )];
-        }
-        case AttributeType.Array:{
-            return [Line(
-                format!"rule.%s ~= %s.parse(source);"(
-                    attr.name, 
-                    attr.type.name
-                )
-            )];
-        }
-    }
+Line[] codeGenAttribute(Attribute attr) { 
+    string fster = (){final switch (attr.category) {
+        case AttributeType.Bare:
+            return "rule.%s = _parse%s(source);";
+        case AttributeType.Array:
+            return "rule.%s ~= _parse%s(source);";
+    }}();
+
+    return [
+        Line(
+            format(fster,
+                attr.name, 
+                attr.type.name
+            )
+        )
+    ];
 }
 
 Line[] codeGenRuleRef(RuleRef rule) {
-    return [Line(rule.name~".parse(source);")];
+    if (rule.name == "") return [];
+    else {
+        return [Line(
+            format!"_parse%s(source);"
+                (rule.name))
+        ];
+    }
 }
 
 
 Line[] codeGenMultiCapture(MultiCapture mc) {
     return [
-        Line(format!"source.parseMultiCapture!(%s, %s, (source) {"
+        Line(format!"source.parseMultiCapture!(%s, %s, delegate void(source) {"
             (mc.low, mc.high)),
         lineBlock(
             codeGenSomeToken(mc.token)
@@ -253,13 +295,45 @@ Line[] codeGenVerbatim(VerbatimText vbt) {
     // import std.string: unes
     // writeln(vbt);
     return [
-        Line("parseVerbatim!\""~vbt.str~"\"(source);")
+        Line(format!"parseVerbatim!\"%s\"(source);"
+            (vbt.str))
     ];
 }
 
 
 Line[] codeGenCharCaptureGroup(CharCaptureGroup chCG) {
-    return [Line(format!"parseCharCaptureGroup(source, %s);"(chCG.options ))];
+    return [
+        Line("if (0"),
+        lineBlock(
+            chCG.range.map!(a=>a.match!(
+                (Fchar    ch1) => Line(
+                    format!"|| source.front == '%s'"(
+                        ch1)),
+                (Fchar[2] ch2) => Line(
+                    format!"|| (source.front >= '%s' && source.front <= '%s')"(
+                        ch2[0], ch2[1]))
+            )).array
+        ),
+        Line(") {source.popFront;}"),
+        Line(q{else throw new BadParse("");})
+    ];
+}
+
+
+auto interleave(R, T)(R range, T delimiter)  {
+    T[] ret;
+    while (true) {
+        ret ~= range.front;
+        if (!range.empty) break;
+        ret ~= delimiter;
+        range.popFront;
+    }
+    return ret;
+}
+
+
+Line[] codeGenWildCard() {
+    return [Line("source.popFront;")];
 }
 
 
@@ -267,13 +341,10 @@ Line[] codeGenSomeToken(Token token) {
     return token.match!(
         (Attribute    a) => codeGenAttribute(a),
         (RuleRef      a) => codeGenRuleRef(a),
-        
         (VerbatimText a) => codeGenVerbatim(a),
-        // (CharCaptureGroup a) => codeGenCharCaptureGroup(a),
-
+        (CharCaptureGroup a) => codeGenCharCaptureGroup(a),
+        (CharWildCard _) => codeGenWildCard(),
         (MultiCapture a) => codeGenMultiCapture(a),
-
-
         (Group        a) => codeGenGroup(a),
         (_) {return assert(false, "'"
             ~ typeof(_).stringof
@@ -296,37 +367,45 @@ unittest {
         InputSource source;
         
         string sourceText = 
-//         `
-// LoremIpsum = (
-// 	" Lorem Ipsum "
-// )
-
-// Call {Expression caller, []Expression args} = (
-//     caller "(" ?( args *("," args) ) ")"
-// )
-//         `;
+        // " ";
         import("test/gram/dion.dart");
         source = new InputSourceString(sourceText);
         // source = new InputSourceString("Test : {Bungar, Dungar}");
         
         // return source.parseGrammar.to!string;
-        
+        assert(source !is null);
         Line[] lines = source.parseGrammar.map!(dec => 
             codeGenType(dec)
-        ).join;
+        ).join(Line(""));
         
-        // writeln(lines.linesToString);
+            // import std.algorithm;
+            // writeln(source.table);
+            // source.table.each!((v,k)=>writeln(v));
         return lines.linesToString;
     }
-pragma(msg, ",-,"~__FILE__);
-    // pragma(msg, "...\n" ~ func());
-pragma(msg, ",,,"~__FILE__);
+    File f = File("testrun.d", "wb");
+    f.writeln("module testrun;
+import parserhelpers;
+import input;
+import std.sumtype;
+
+");
+    f.writeln(func());
+    f.writeln(q{void main() {
+    import std.stdio;
+    writeln("-");
+    InputSource source = new InputSourceString("foo + bar  ");
+    writeln(_parseOpPrec10(source));
+    writeln("-");
+}});
+    // pragma(msg, func());
+    // import parserhelpers;
     // mixin(func());
-    writeln(func());
+
+    // InputSource source = new InputSourceString("foobar  ");
+
+    // writeln(_parseExpression(source));
 }// +/
-
-
-
 
 
 /+ Note to self: When rules without arguments are themselves

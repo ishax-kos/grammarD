@@ -31,12 +31,17 @@ struct RuleRef {
         return v;
     }
     string name() {
-        auto v = source.table[index];
-        if (v is null) return index;
-        else return v.name;
+        if (source is null) {
+            return index;
+        }
+        else {
+            auto v = source.table[index];
+            if (v is null) return index;
+            else return v.name;
+        }
     }
     string toString() {
-        return "RuleRef(" ~ index ~ ")";
+        return "RuleRef(" ~ name ~ ")";
     }
 }
 struct VerbatimText {string str;}
@@ -58,42 +63,20 @@ struct ___CharCaptureGroup {
     }
 }
 
-
+public import charhandling: Fchar;
 struct CharCaptureGroup {
-    string options;
-    CharRange range() {return CharRange(options);}
-}
-struct CharRange {
-    char[] options;
-
-    this(string opt) {
-        options = opt.dup;
-    }
-
-    bool empty() {return options == "";}
-    char front() {return options[0];}
-    void popFront() {
-        if (options.length >= 4) {
-            if (options[1..3] == "..") {
-                if (options[0] >= options[3]) {
-                    options = options[4..$]; return;
-                }
-                else {
-                    options[0]+=1; return;
-                }
-            }
-        }
-        options = options[1..$];
-        return;
+    import charhandling;
+    CharCapRange range;
+    this(string str) {
+        range.raw = str;
     }
 }
 
 unittest
 {
     import std.stdio;
-    foreach (c; CharCaptureGroup("A..Za..z0..9_").range) {
-        write(c);
-    }
+    writeln("---- ", __FILE__," CharacterCaptureGroup ----");
+    writeln(CharCaptureGroup("A..Za..z0..9_").range);
     writeln();
 }
 
@@ -109,11 +92,6 @@ class Group {
     this (Token[][] alts, RuleRef spRule) {this.alts = alts; spaceRule = spRule;}
     override string toString() {
         import std.format;
-        // import std.conv;
-        // import std.algorithm;
-        // import std.array;
-        // import std.stdio;
-        // static _s = 0; writef!"%d_"(_s++); scope(exit) _s--;
         if (alts.length == 1) 
             return format!"Group(%(%s, %))"(alts[0]);
         else {

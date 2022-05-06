@@ -33,7 +33,6 @@ T parseG(T:DeclarationStruct)(InputSource source) {
     consumeWS(source);
 
     rule.ruleBody = source.ruleFetchGroup(rule.members);
-    source.foundDef(rule);
     return rule;
 }
 
@@ -64,10 +63,6 @@ T parseG(T:DeclarationSum)(InputSource source) {
         rule.types ~= source.ruleFetchRule();
         consumeWS(source);
     }
-    // }
-    // else {
-    //     throw new BadParse("No open bracket.");
-    // }
     return rule;
 }// +/
 
@@ -118,39 +113,44 @@ Declaration[] parseGrammar(InputSource source) {
             source.parseComments();
         }
         else {
-            grammar ~= source.tryAll!(Declaration,
+            grammar ~= source.foundDef(source.tryAll!(Declaration,
                 (a) => a.parseG!DeclarationSum,
                 (a) => a.parseG!DeclarationStruct
-            );
+            ));
         }
         source.consumeWS();
-        writeln("--------------", source.tell);
     }
     
-    foreach (item; [
+    Declaration[] defaults = [
         defaultLineBreak(),
         defaultWS(),
         defaultIdentifier(),
         defaultStringLiteral()
-    ]) {
+    ];
+    foreach (item; defaults) {
         import symtable;
-        try {source.foundDef(item);}
-        catch (SymbolAlreadyDefined) {}
+        if (item.name in source.table) {
+            try {
+                grammar = source.foundDef(item) ~ grammar;
+            }
+            catch (SymbolAlreadyDefined) {}
+        }
+        
     }
     
     foreach (key, entry; source.table) {
-        if (entry is null) throw new Error("\""~key~"\" is not declared!");
+        assert (entry !is null, "\""~key~"\" is not declared!");
     }
     return grammar;
 }
 
 
-DeclarationStruct defaultWS() {
+Declaration defaultWS() {
     auto r = new DeclarationStruct();
     r.name = "WS";
     r.ruleBody = new Group(
         [[Token(new MultiCapture(
-            Token(CharCaptureGroup(" \n\r")),
+            Token(CharCaptureGroup(" \\n\\r")),
             1,0
         ))]], 
         RuleRef()
@@ -158,22 +158,22 @@ DeclarationStruct defaultWS() {
     return r;
 }
 
-DeclarationStruct defaultLineBreak() {
+Declaration defaultLineBreak() {
     auto r = new DeclarationStruct();
     // auto m = new MultiCapture();
     r.name = "LineBreak";
     r.ruleBody = new Group(
         [
-            [Token(VerbatimText("\r\n"))], 
-            [Token(VerbatimText("\r"))], 
-            [Token(VerbatimText("\n"))]
+            [Token(VerbatimText("\\r\\n"))], 
+            [Token(VerbatimText("\\r"))], 
+            [Token(VerbatimText("\\n"))]
         ],
         RuleRef()
     );
     return r;
 }
 
-DeclarationStruct defaultIdentifier() {
+Declaration defaultIdentifier() {
     auto r = new DeclarationStruct();
     r.name = "Identifier";
     r.ruleBody = new Group(
@@ -190,12 +190,12 @@ DeclarationStruct defaultIdentifier() {
 }
 
 
-DeclarationStruct defaultStringLiteral() {
+Declaration defaultStringLiteral() {
     auto r = new DeclarationStruct();
     r.name = "StringLiteral";
     r.ruleBody = new Group(
         [[
-            Token(VerbatimText("\"")),
+            Token(VerbatimText("\\\"")),
             Token(new MultiCapture(
                 Token(new Group(
                     [
@@ -206,7 +206,7 @@ DeclarationStruct defaultStringLiteral() {
                 )),
                 0, 0
             )),
-            Token(VerbatimText("\""))
+            Token(VerbatimText("\\\""))
         ]],
         RuleRef()
     );
@@ -222,14 +222,12 @@ unittest {
     writeln("---- Unittest ", __FILE__, " ----");
     string sourceText = import("test/gram/dion.dart");
     InputSource source = new InputSourceString(`
-        Call { Expression caller, []Expression args} = (
-            caller "(" ?( args *("," args) ) ")"
-        )
+        Variable = (Identifier)
     `);
-    // writeln(parseGrammar(source));
-    source.consumeWS();
-    writeln(parseG!DeclarationStruct(source));
-
+    writeln(source.table);
+    // source.consumeWS();
+    // writeln(parseG!DeclarationStruct(source));
+    writeln(parseGrammar(source));
     // return "source.table";
 
 

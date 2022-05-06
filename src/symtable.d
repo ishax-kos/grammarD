@@ -36,17 +36,36 @@ Declaration foundDef(InputSource source, Declaration rule) {
             ~"\" Symbol Already Defined"
         );
     }
-    // source.table.update(
-    //     rule.name,
-    //     () => rule,
-    //     (Declaration a) {
-    //         if (a)
-    //             return rule;
-    //         else
-    //             throw new SymbolAlreadyDefined(
-    //                 "\""~a.name
-    //                 ~"\" Symbol Already Defined");
-    //     }
-    // );
     return rule;
+}
+
+
+
+unittest {
+    import std.stdio;
+    import std.conv;
+    writeln("---- Unittest ", __FILE__, " ----");
+
+    import parsing.gstatements;
+    import symtable;
+    import parsing.lex;
+    InputSource source;
+    
+    string sourceText = 
+    `
+Variable {Bungo foo} = (Identifier)
+    `;
+    
+    source = new InputSourceString(sourceText);
+
+    
+    // source.table["foo"] = null;
+    // assert("foo" in source.table);
+    source.consumeWS;
+    source.parseG!DeclarationStruct;
+    auto s2 = source.save;
+    
+    import std.algorithm;
+    writeln(s2.table);
+    source.table.each!((v,k)=>writeln(v));
 }
