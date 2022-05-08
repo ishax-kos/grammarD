@@ -354,21 +354,26 @@ Line[] codeGenSomeToken(Token token) {
 }
 
 
-
-//+
-unittest {
-    import std.stdio;
-    import std.conv;
-    writeln("---- Unittest ", __FILE__, " 1 ----");
-
-    auto func(){
+version(unittest) {
+    auto testCodeGen(){
         import parsing.gstatements;
         import symtable;
         InputSource source;
         
         string sourceText = 
-        // " ";
-        import("test/gram/dion.dart");
+        q{
+            A = (
+                "stuff"
+            )
+            B : 
+             | A
+             | Identifier
+
+            C = (
+                B | "..."
+            )
+        };
+        // import("test/gram/dion.dart");
         source = new InputSourceString(sourceText);
         // source = new InputSourceString("Test : {Bungar, Dungar}");
         
@@ -383,41 +388,31 @@ unittest {
             // source.table.each!((v,k)=>writeln(v));
         return lines.linesToString;
     }
-    File f = File("testrun.d", "wb");
-    f.writeln("module testrun;
-import parserhelpers;
-import input;
-import std.sumtype;
+    
+    import parserhelpers;
+    import input;
+    import std.sumtype;
+    mixin(testCodeGen());
+}
 
-");
-    f.writeln(func());
-    f.writeln(q{void main() {
+
+
+unittest {
     import std.stdio;
-    writeln("-");
-    InputSource source = new InputSourceString("foo + bar  ");
-    writeln(_parseOpPrec10(source));
-    writeln("-");
-}});
-    // pragma(msg, func());
-    // import parserhelpers;
-    // mixin(func());
+    import std.conv;
+    writeln("---- Unittest ", __FILE__, " 1 ----");
+    
+    File testrun = File("testrun.d", "wb");
+    testrun.writeln(testCodeGen());
+    testrun.close;
 
-    // InputSource source = new InputSourceString("foobar  ");
+    InputSource source = new InputSourceString("... big stuff  ");
+    
+    writeln(_parseC(source));
 
-    // writeln(_parseExpression(source));
-}// +/
-
-
-/+ Note to self: When rules without arguments are themselves
- an argument, you need to capture the seek before and after
- in order to know the actual content.
- 
- 
- also maybe make rule parsing a static method
- 
- 
- what if the indent count was relative. Like an indent sobel filter. 
+}
 
 
+/++ To do: 
     Make Group spacing parameter take a Token and not a RuleRef
 +/
