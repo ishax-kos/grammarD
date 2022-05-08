@@ -11,12 +11,19 @@ import std.format;
 
 
 Token getToken(InputSource source, Attribute[] args) {
+    try {
+        return tryAll!(Token, 
+            (a) => a.ruleFetchProperty(args),
+            (a) => a.ruleFetchWildCard(),
             (a) => a.ruleFetchGroup(args),
-        // (a) => a.ruleFetchNumberLiteral(),
-        (a) => a.ruleFetchCharCaptureGroup(),
-        (a) => a.ruleFetchMultiStar(args),
-        (a) => a.ruleFetchMultiQM(args),
-    )(source);
+            (a) => a.ruleFetchRule(),
+            (a) => a.ruleFetchVerbatimText(),
+            (a) => a.ruleFetchCharCaptureGroup(),
+            (a) => a.ruleFetchMultiStar(args),
+            (a) => a.ruleFetchMultiQM(args),
+        )(source);
+    }
+    catch (BadParse) throw new Error("Invalid token");
 }
 
 
