@@ -50,13 +50,6 @@ T parseG(T:DeclarationSum)(InputSource source) {
         source.popFront;
         consumeWS(source);
     }
-    // if (source.front == '{') {
-    //     source.popFront;
-    //     consumeWS(source);
-    //     if (source.front == '}') {
-    //         source.popFront;
-    //     }
-        // else 
     while (source.front == '|') {
         source.popFront;
         consumeWS(source);
@@ -98,7 +91,6 @@ Attribute[] lexGTypeArgs(InputSource source) {
         }
         else throw new BadParse("");
     }
-    // writeln(source.seek);
     return output;
 }
 
@@ -151,7 +143,7 @@ Declaration defaultWS() {
     r.ruleBody = new Group(
         [[Token(new MultiCapture(
             Token(CharCaptureGroup(" \\n\\r")),
-            1,0
+            0,0
         ))]], 
         RuleRef()
     );
@@ -160,7 +152,6 @@ Declaration defaultWS() {
 
 Declaration defaultLineBreak() {
     auto r = new DeclarationStruct();
-    // auto m = new MultiCapture();
     r.name = "LineBreak";
     r.ruleBody = new Group(
         [
@@ -170,7 +161,7 @@ Declaration defaultLineBreak() {
         ],
         RuleRef()
     );
-    return r;
+    return r; 
 }
 
 Declaration defaultIdentifier() {
