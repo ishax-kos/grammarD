@@ -213,26 +213,14 @@ Declaration defaultStringLiteral() {
     return r;
 }
 
-// /+
 unittest {
-
-// pragma(msg,{
-
     import std.stdio;
-    writeln("---- Unittest ", __FILE__, " ----");
+    import std.range;
+    // writeln("---- Unittest ", __FILE__, " ----");
     string sourceText = import("test/gram/dion.dart");
     InputSource source = new InputSourceString(`
         Variable = (Identifier)
     `);
-    writeln(source.table);
-    // source.consumeWS();
-    // writeln(parseG!DeclarationStruct(source));
-    writeln(parseGrammar(source));
-    // return "source.table";
-
-
-// }());
-
-    
+    assert(source.table.empty);
+    // assert(parseGrammar(source).equal([Identifier(), WS(), Variable()]));
 }
-// +/

@@ -75,9 +75,21 @@ struct CharCaptureGroup {
 unittest
 {
     import std.stdio;
-    writeln("---- ", __FILE__," CharacterCaptureGroup ----");
-    writeln(CharCaptureGroup("A..Za..z0..9_").range);
-    writeln();
+    import std.range;
+    import std.algorithm: all, map;
+    import charhandling;
+    import std.conv;
+    
+    auto r = CharCaptureGroup("A..Za..z0..9_").range;
+    string[] sa = ["AZ", "az", "09", "_"];
+    while (!r.empty) {
+        assert(sa.front == r.front.match!(
+            (Fchar char1) => [char1.code].to!string,
+            (Fchar[2] char2) => [char2[0].code, char2[1].code].to!string
+        ));
+        sa.popFront;
+        r.popFront;
+    }
 }
 
 

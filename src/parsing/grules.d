@@ -4,7 +4,6 @@ import nodes;
 import input;
 import parsing.lex;
 
-import std.stdio : write, writeln, writef, writefln;
 import std.sumtype;
 import std.conv;
 import std.format;
@@ -231,7 +230,7 @@ Group ruleFetchGroup(InputSource source, Attribute[] args) {
 unittest
 {
     import std.conv;
-    writeln("---- Unittest ", __FILE__, " ----");
+    // writeln("---- Unittest ", __FILE__, " ----");
     // auto source = new InputSourceString(`"foobar"`);
     auto source = new InputSourceString(`
         foo . (bar) WS "baz" 'abc' *alpha ?beta

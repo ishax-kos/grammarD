@@ -42,13 +42,14 @@ Declaration foundDef(InputSource source, Declaration rule) {
 
 
 unittest {
-    import std.stdio;
+    // import std.stdio;
     import std.conv;
-    writeln("---- Unittest ", __FILE__, " ----");
+    // writeln("---- Unittest ", __FILE__, " ----");
 
     import parsing.gstatements;
     import symtable;
     import parsing.lex;
+    import std.algorithm: equal;
     InputSource source;
     
     string sourceText = 
@@ -66,6 +67,7 @@ Variable {Bungo foo} = (Identifier)
     auto s2 = source.save;
     
     import std.algorithm;
-    writeln(s2.table);
-    source.table.each!((v,k)=>writeln(v));
+    Declaration[string] aa = ["WS":null, "Identifier":null, "Bungo":null];
+    assert(s2.table == aa);
+    // source.table.each!((v,k)=>writeln(v));
 }

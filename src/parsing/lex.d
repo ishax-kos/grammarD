@@ -106,11 +106,9 @@ Attribute lexAttribute(InputSource source) {
 }
 
 unittest {
-    import std.stdio;
-    writeln("---- Unittest ", __FILE__, " ----");
+    // import std.stdio;
+    // writeln("---- Unittest ", __FILE__, " ----");
     InputSource source = new InputSourceString(`ABC `);
-    writeln("lexGName(source)");
-    writeln(lexGName(source));
-    writeln("lexGName(source)");
+    assert(lexGName(source) == "ABC");
 
 }
