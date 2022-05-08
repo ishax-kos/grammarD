@@ -40,8 +40,8 @@ VerbatimText ruleFetchVerbatimText(InputSource source) {
     string output;
     if (source.front != '"')
         throw new BadParse(
-            format!"\" not found. Found %s instead."(
-                source.front));
+            format!"\" not found. Found %s instead"(
+                source.front), source);
     else 
         source.popFront;
     while (true) {
@@ -182,40 +182,39 @@ Group ruleFetchGroup(InputSource source, Attribute[] args) {
     Token spaceRule = cast(Token) source.foundCall("WS");
 
     if (source.front == '~') {
-        source.popFront(); consumeWS(source);
+        source.popFront(); 
+        consumeWS(source);
         if (source.front == '(') {
             spaceRule = cast(Token) VerbatimText("");
         }
         else {
             spaceRule = source.ruleFetchRule(); 
             consumeWS(source);
-            if (source.front() != '(') throw new BadParse("( not found", source);
-            else source.popFront;
-            consumeWS(source);
         }
     }   
-    
+     
+    if (source.front() == '(') {
+        source.popFront;
+        consumeWS(source);
+    }
     else {
-        if (source.front() != '(') {
-            throw new BadParse("( not found", source);
-        }
-        else {
-            source.popFront;
-        }
+        throw new BadParse("'(' not found", source);
+    }
+    
+    if (source.front == '|') {
+        source.popFront();
+        consumeWS(source);
     }
     
     Token[][] alternates;
     Token[] group;
     while (true) {
-        consumeWS(source);
-        // writeln(group);
         if (source.front == ')') {
             alternates ~= group;
             source.popFront;
             break;
         }
-        else
-        if (source.front == '|') {
+        else if (source.front == '|') {
             alternates ~= group;
             source.popFront;
             group = [];
@@ -224,7 +223,7 @@ Group ruleFetchGroup(InputSource source, Attribute[] args) {
             auto t = getToken(source, args);
             group ~= t;
         }
-        
+        consumeWS(source);
     }
     Group g = new Group();
     g.alts = alternates;
