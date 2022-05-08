@@ -5,15 +5,15 @@ import nodes;
 // import parsing.lex;
 
 
-/+
+/++
     Remember not to use whitespace skipping at the head 
     and tail of functions. Only if strictly necessary, 
     and only in-between captures!
+
+    Whitespace skipping must be used at the start and end
+    of parsing as a whole.
 +/
 
-// T* parse(T)(InputSource source) {
-//     return new T();
-// }
 
 void parseMultiCapture(uint min, uint max, alias lambda)
 (InputSource source) {
@@ -45,6 +45,10 @@ void parseVerbatim(string str)(InputSource source) {
 }
 
 
+/++ 
+    Takes a return type and a number of lambdas. calls each lambda until
+    a BadParse exception is not thrown.
++/
 pragma(inline)
 T tryAll(T, C...)(InputSource source) {
     import std.format;
@@ -69,6 +73,7 @@ T tryAll(T, C...)(InputSource source) {
 }
 
 
+/// Captures all input from the position of input start to input current in a string.
 string parseSince(InputSource current, InputSource start) {
     assert(current.sharesWith(start));
     import std.range: take;
