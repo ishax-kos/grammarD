@@ -46,8 +46,13 @@ void parseMultiCapture(uint min, uint max, alias parseSpaceRule, alias lambda)
 
 
 void parseVerbatim(string str)(InputSource source) {
+    import std.format;
     foreach (ch; str) {
-        if (source.front != ch) {throw new BadParse("");}
+        if (source.front != ch) {
+            throw new BadParse(
+                format!"'%c' doesn't match '%c'"
+                (source.front, ch), source);
+        }
         else {source.popFront;}
     }
 }
@@ -75,7 +80,7 @@ T tryAll(T, C...)(InputSource source) {
         }
         catch (BadParse e) earr~=e;
     }
-    throw new Error(earr.format!"%(%s\n\n%)\n\nFinal Error Stack");
+    throw new BadParse(earr.format!"%(%s\n\n%)\n\nFinal Error Stack");
 
     // return output;
 }
