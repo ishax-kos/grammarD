@@ -12,12 +12,7 @@ import std.format;
 
 
 Token getToken(InputSource source, Attribute[] args) {
-    return tryAll!(Token, 
-        (a) => a.ruleFetchProperty(args),
-        (a) => a.ruleFetchWildCard(),
-        (a) => a.ruleFetchGroup(args),
-        (a) => a.ruleFetchRule(),
-        (a) => a.ruleFetchVerbatimText(),
+            (a) => a.ruleFetchGroup(args),
         // (a) => a.ruleFetchNumberLiteral(),
         (a) => a.ruleFetchCharCaptureGroup(),
         (a) => a.ruleFetchMultiStar(args),
