@@ -126,7 +126,8 @@ Line[] codeGenTypeStruct(DeclarationStruct decl) {
                     return decl.members.map!((Attribute attr) {
                         string fstr = attr.category == AttributeType.Array
                             ? "%s[] %s;"
-                            : "%s %s;";
+                            : "%s %s;"
+                        ;
                         string typeName = attr.type.name;
                         return Line(format(fstr,
                             typeName, 
@@ -148,6 +149,7 @@ Line[] codeGenFactory(DeclarationStruct decl) {
         format!"%s _parse%s(InputSource source) {"
             (decl.name, decl.name),
         lineBlock(
+            q{void delegate(InputSource) parseSpaceRule = (s){};},
             Line(format!"alias This = %s;"(decl.name)),
             codeGenLeftRecursion(),
             Line("This rule = This();"),
@@ -178,16 +180,20 @@ Line[] codeGenSumFactory(DeclarationSum decl) {
         Line(format!"%s _parse%s(InputSource source) {"
             (decl.name, decl.name)),
         lineBlock(
-            codeGenLeftRecursion(),
-            Line("return source.tryAll!("~ decl.name ~","),
+            // "import std.traits: PointerTarget;",
+            // codeGenLeftRecursion(),
+            "auto val = %s();".format(decl.name),
+            "val.sum = new typeof(*val.sum)();",
+            "*val.sum = source.tryAll!("~ decl.name ~".SumT,",
             lineBlock(
                 decl.types.map!(ruleRef =>
                     "source => _parse" ~ ruleRef.name ~ "(source),"
                 )
             ),
-            Line(");")
+            ");",
+            "return val;"
         ),
-        Line("}")
+        "}"
     );
 }
 
@@ -199,26 +205,32 @@ class CodeGenFailure: Exception {
 
 
 Line[] codeGenTypeSum(DeclarationSum decl) {
-    return [
-        Line(format!"alias %s = SumType!("(decl.name)),
+    return lineList(
+        format!"struct %s {"(decl.name),
         lineBlock( 
-            decl.types[0..$-1].map!(
-                (t) => t.name ~ ", "
-            ).array
-            ~ decl.types[$-1].name /// last element has no comma
+            "alias SumT = SumType!(",
+            lineBlock(
+                decl.types[0..$].map!(
+                    (t) => t.name ~ ", " 
+                )
+            ),
+            Line(");"),
+            "SumT* sum;"
         ),
-        Line(");")
-    ]
-    ~ codeGenSumFactory(decl);
+        "string toString() {import std.conv; return (*sum).to!string;}",
+        "}",
+        "",
+        codeGenSumFactory(decl)
+    );
 }
 
-Line[] codeGenAlternate(Token[] alt, RuleRef spaceRule) {
+Line[] codeGenAlternate(Token[] alt) {
     Line[] ret;
     if (!alt.empty) while (true) {
         ret ~= codeGenSomeToken(alt.front);
         alt.popFront;
         if (alt.empty) break;
-        ret ~= codeGenRuleRef(spaceRule);
+        ret ~= [Line("parseSpaceRule(source);")];
     }
     return ret;
 }
@@ -226,23 +238,31 @@ Line[] codeGenAlternate(Token[] alt, RuleRef spaceRule) {
 
 Line[] codeGenGroup(Group group) {
     if (group.alts.length == 1) {
-        return codeGenAlternate(group.alts[0], group.spaceRule);
+        return lineList(
+            "parseSpaceRule = (InputSource source) {",
+                lineBlock(codeGenSomeToken(group.spaceRule)),
+            "};",
+            codeGenAlternate(group.alts[0])
+        );
     }
     else
     if (group.alts.length > 1) {
-        return [
+        return lineList(
+            "parseSpaceRule = (InputSource source) {",
+                lineBlock(codeGenSomeToken(group.spaceRule)),
+            "};",
             Line("source.tryAll!(void,"),
             lineBlock(
                 group.alts.map!( (alt) => [
                     Line("(source) {"),
                     lineBlock(
-                        codeGenAlternate(alt, group.spaceRule)
+                        codeGenAlternate(alt)
                     ),
                     Line("},"),
                 ]).join
             ),
-            Line(");")
-        ];
+            ");",
+        );
     }
     else {
         throw new CodeGenFailure("A group cannot have zero alternates.");
@@ -281,7 +301,7 @@ Line[] codeGenRuleRef(RuleRef rule) {
 
 Line[] codeGenMultiCapture(MultiCapture mc) {
     return [
-        Line(format!"source.parseMultiCapture!(%s, %s, delegate void(source) {"
+        Line(format!"source.parseMultiCapture!(%s, %s, parseSpaceRule, delegate void(source) {"
             (mc.low, mc.high)),
         lineBlock(
             codeGenSomeToken(mc.token)
@@ -346,7 +366,7 @@ Line[] codeGenSomeToken(Token token) {
         (CharWildCard _) => codeGenWildCard(),
         (MultiCapture a) => codeGenMultiCapture(a),
         (Group        a) => codeGenGroup(a),
-        (_) {return assert(false, "'"
+        (_) {return assert(false, "'" 
             ~ typeof(_).stringof
             ~ "' is not implemented in the final codegen.");
         }

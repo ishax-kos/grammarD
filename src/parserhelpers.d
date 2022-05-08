@@ -15,23 +15,31 @@ import nodes;
 +/
 
 
-void parseMultiCapture(uint min, uint max, alias lambda)
+/++ 
++/
+void parseMultiCapture(uint min, uint max, alias parseSpaceRule, alias lambda)
 (InputSource source) {
+    static assert(max == 0 
+        ? true
+        : min <= max
+    );
     ulong n = 0;
     
     while (true) {
         static if (max != 0) {
             if (n >= max) {break;}
-        }
+        } 
         try {
             lambda(source);
+            parseSpaceRule(source);
             n += 1;
         }
         catch(BadParse bp) {break;}
     }
     static if (min != 0) {
         if (n < min) {
-            throw new BadParse("Not enough iterations.");
+            import std.format;
+            throw new BadParse("Not enough iterations min %s, max %s,".format(min, max), source);
         }
     }
 }
