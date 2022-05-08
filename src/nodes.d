@@ -99,7 +99,7 @@ enum Parentheses {open, closed}
 
 class Group {
     Token[][] alts = [[]];
-    RuleRef spaceRule;
+    Token spaceRule;
     this () {}
     this (Token[][] alts, RuleRef spRule) {this.alts = alts; spaceRule = spRule;}
     override string toString() {

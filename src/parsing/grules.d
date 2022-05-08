@@ -172,13 +172,12 @@ MultiCapture ruleFetchMultiQM(InputSource source, Attribute[] args) {
 Group ruleFetchGroup(InputSource source, Attribute[] args) {
     import symtable;
 
-    RuleRef spaceRule = source.foundCall("WS");
+    Token spaceRule = cast(Token) source.foundCall("WS");
 
     if (source.front == '~') {
         source.popFront(); consumeWS(source);
         if (source.front == '(') {
-            source.popFront(); consumeWS(source);
-            spaceRule = source.foundCall("");
+            spaceRule = cast(Token) VerbatimText("");
         }
         else {
             spaceRule = source.ruleFetchRule(); 

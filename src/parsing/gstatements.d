@@ -105,7 +105,7 @@ Attribute[] lexGTypeArgs(InputSource source) {
 
 
 Declaration[] parseGrammar(InputSource source) {
-    source.foundDef(new EmptyRule());
+    // source.foundDef(new EmptyRule());
     Declaration[] grammar;
     source.consumeWS();
     while (!source.empty()) {
