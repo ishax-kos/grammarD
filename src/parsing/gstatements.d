@@ -60,7 +60,6 @@ T parseG(T:DeclarationSum)(InputSource source) {
 }// +/
 
 
-
 Attribute[] lexGTypeArgs(InputSource source) {
     import std.format;
     Attribute[] output;
@@ -123,7 +122,7 @@ Declaration[] parseGrammar(InputSource source) {
         import symtable;
         if (item.name in source.table) {
             try {
-                grammar = source.foundDef(item) ~ grammar;
+                grammar ~= source.foundDef(item);
             }
             catch (SymbolAlreadyDefined) {}
         }
