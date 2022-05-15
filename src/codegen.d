@@ -45,20 +45,26 @@ string linesToString(Line[] lines, uint indentCount = 0) {
 }
 
 import std.range;
-Line[] lineList(T)(T lines) {
+Line[] lineList(T)(T lines) if (isInputRange!T) {
     static if (is(ElementType!T == Line)) {
         return lines.array;
     }
-    static if (is(ElementType!T == string)) {
+    static if (is(ElementType!(ElementType!T) == Line)) {
+        return lines.join;
+    }
+    else static if (is(ElementType!T == string)) {
         return lines.map!(a=>Line(a)).array;
+    }
+    else static if (is(T : string)) {
+        return [Line(lines)];
     }
 }
 
-Line lineBlock(T)(T lines) {
-    Line line;
-    line.internal = Line.LineSum(lineList(lines));
-    return line;
-}
+// Line lineBlock(T)(T lines) {
+//     Line line;
+//     line.internal = Line.LineSum(lineList(lines));
+//     return line;
+// }
 
 Line[] lineList(T...)(T items) {
     Line[] lines;
@@ -91,15 +97,28 @@ unittest {
 
 Line[] codeGenType(Declaration decl) {
     if (auto d = cast(DeclarationStruct) decl) {
-        return codeGenTypeStruct(d);
+        if (d.members.length == 0) {
+            return lineList(
+                d.codeGenTypeNoAtt,
+                "",
+                d.codeGenNoAttFactory,
+            );
+        }
+        else {
+            return lineList(
+                d.codeGenTypeStruct,
+                "",
+                d.codeGenStructFactory,
+            );
+        }
     }
-    else 
-    if (auto d = cast(DeclarationSum) decl) {
-        return codeGenTypeSum(d);
+    else if (auto d = cast(DeclarationSum) decl) {
+        return lineList(
+            d.codeGenTypeSum,
+            "",
+            d.codeGenSumFactory,
+        );
     }
-    // else if (cast(EmptyRule) decl) {
-    //     return codeGenTypeSum(decl);
-    // }
     else {
         throw new CodeGenFailure(
              "Declaration type "
@@ -111,66 +130,90 @@ Line[] codeGenType(Declaration decl) {
 
 Line[] codeGenTypeStruct(DeclarationStruct decl) {
     import std.stdio;
-    bool isBasic = (decl.members.length == 0);
-    return [
+    return lineList(
         Line(format!"struct %s {"(decl.name)),
         lineBlock(
-            () {
-                if (isBasic) {
-                    return [
-                        Line(q{string capture = "";}),
-                        // Line(q{alias capture this;})    
-                    ];
-                }
-                else {
-                    return decl.members.map!((Attribute attr) {
-                        string fstr = attr.category == AttributeType.Array
-                            ? "%s[] %s;"
-                            : "%s %s;"
-                        ;
-                        string typeName = attr.type.name;
-                        return Line(format(fstr,
-                            typeName, 
-                            attr.name)
-                        );
-                    }).array;
-                }
-            }()
+            decl.members.map!((Attribute attr) {
+                string fstr = (attr.category == AttributeType.Array)
+                    ? "%s[] %s;"
+                    : "%s %s;"
+                ;
+                string typeName = attr.type.name;
+                return Line(format(fstr,
+                    typeName, 
+                    attr.name)
+                );
+            }).array
         ),
-        Line("}")
-    ]
-    ~ codeGenFactory(decl);
+        "}"
+    );
 }
 
 
-Line[] codeGenFactory(DeclarationStruct decl) {
-    bool isBaseLevel = decl.members == [];
+Line[] codeGenStructFactory(DeclarationStruct decl) {
     return lineList(
         format!"%s _parse%s(InputSource source) {"
             (decl.name, decl.name),
         lineBlock(
+            // codeGenLeftRecursion(),
             q{void delegate(InputSource) parseSpaceRule = (s){};},
-            Line(format!"alias This = %s;"(decl.name)),
-            codeGenLeftRecursion(),
-            Line("This rule = This();"),
-            "",
-            (isBaseLevel 
-                ? Line("InputSource start = source.save;")
-                ~ codeGenGroup(decl.ruleBody)
-                ~ Line("rule.capture = source.parseSince(start);")
-                : codeGenGroup(decl.ruleBody)),
-            "",
-            Line("return rule;")
+            decl.name~ " rule = " ~decl.name~ "();",
+            // "",
+            codeGenGroup(decl.ruleBody),
+            // "",
+            q{return rule;}
         ),
-        Line("}")
+        "}"
     );
 }
 
-Line[] codeGenLeftRecursion() {
+
+Line[] codeGenTypeNoAtt(DeclarationStruct decl) {
     return lineList(
-        q{static size_t guard = -1;},
-        q{if (guard == source.tell) throw new BadParse("Left recursion");},
-        q{guard = source.tell; scope(exit) guard = -1;},
+        q{alias %s = string;}.format(decl.name)
+    );
+}
+
+
+Line[] codeGenNoAttFactory(DeclarationStruct decl) {
+    return lineList(
+        format!"%s _parse%s(InputSource source) {"
+            (decl.name, decl.name),
+        lineBlock(
+            // codeGenLeftRecursion(),
+            q{void delegate(InputSource) parseSpaceRule = (s){};},
+            q{string capture;},
+            // "",
+            q{InputSource start = source.save;},
+            codeGenGroup(decl.ruleBody),
+            q{capture = source.parseSince(start);},
+            // "",
+            q{return capture;}
+        ),
+        "}"
+    );
+}
+
+
+Line[] codeGenTypeSum(DeclarationSum decl) {
+    return lineList(
+        format!"struct %s {"(decl.name),
+        lineBlock( 
+            "alias SumT = SumType!(",
+            lineBlock( //(){
+                decl.types[0..$].map!(
+                    (t) => t.name ~ ", " 
+                )//;
+            //     pragma(msg, typeof(foo));
+            //     pragma(msg, ElementType!(typeof(foo)));
+            //     return "fuck";
+            // }()
+            ),
+            ");",
+            q{SumT* sum;}
+        ),
+        q{string toString() {import std.conv; return (*sum).to!string;}},
+        "}"
     );
 }
 
@@ -181,13 +224,19 @@ Line[] codeGenSumFactory(DeclarationSum decl) {
             (decl.name, decl.name)),
         lineBlock(
             // "import std.traits: PointerTarget;",
-            // codeGenLeftRecursion(),
+            // codeGenLeftRecursion (),
             "auto val = %s();".format(decl.name),
             "val.sum = new typeof(*val.sum)();",
             "*val.sum = source.tryAll!("~ decl.name ~".SumT,",
-            lineBlock(
-                decl.types.map!(ruleRef =>
-                    "source => _parse" ~ ruleRef.name ~ "(source),"
+            lineBlock( decl.types.map!(
+                    (RuleRef rr) => lineList(
+                        "(source) {",
+                        lineBlock(
+                            // codeGenLeftRecursion(),
+                            "return _parse" ~ rr.name ~ "(source);",
+                        ),
+                        "},",
+                    )
                 )
             ),
             ");",
@@ -197,6 +246,7 @@ Line[] codeGenSumFactory(DeclarationSum decl) {
     );
 }
 
+
 class CodeGenFailure: Exception {
     this(string msg, string file = __FILE__, size_t line = __LINE__) {
         super(msg, file, line);
@@ -204,62 +254,68 @@ class CodeGenFailure: Exception {
 }
 
 
-Line[] codeGenTypeSum(DeclarationSum decl) {
+/++ 
+    This should only be used on tryEach arms.
+    Otherwise you break code.
+    +/
+Line[] codeGenLeftRecursion() {
     return lineList(
-        format!"struct %s {"(decl.name),
-        lineBlock( 
-            "alias SumT = SumType!(",
-            lineBlock(
-                decl.types[0..$].map!(
-                    (t) => t.name ~ ", " 
-                )
-            ),
-            Line(");"),
-            "SumT* sum;"
-        ),
-        "string toString() {import std.conv; return (*sum).to!string;}",
-        "}",
-        "",
-        codeGenSumFactory(decl)
+        q{static size_t guard = -1;},
+        q{if (guard == source.tell) throw new BadParse("Left recursion");},
+        q{guard = source.tell; scope(success) guard = -1;},
     );
 }
 
+ 
 Line[] codeGenAlternate(Token[] alt) {
     Line[] ret;
     if (!alt.empty) while (true) {
         ret ~= codeGenSomeToken(alt.front);
         alt.popFront;
         if (alt.empty) break;
-        ret ~= [Line("parseSpaceRule(source);")];
+        ret ~= lineList("parseSpaceRule(source);");
     }
     return ret;
 }
 
 
+/// Group as in "()"
 Line[] codeGenGroup(Group group) {
-    if (group.alts.length == 1) {
-        return lineList(
+    Line[] spaceLines;
+    if (group.spaceRule == Token(VerbatimText(""))) {
+        spaceLines = lineList("parseSpaceRule = (s){};");
+    }
+    else {
+        spaceLines = lineList(
             "parseSpaceRule = (InputSource source) {",
                 lineBlock(codeGenSomeToken(group.spaceRule)),
             "};",
+        );
+    }
+
+    if (group.alts.length == 1) {
+        return lineList(
+            "// Group, Alternate",
+            spaceLines,
             codeGenAlternate(group.alts[0])
         );
     }
-    else
-    if (group.alts.length > 1) {
+    else if (group.alts.length > 1) {
         return lineList(
-            "parseSpaceRule = (InputSource source) {",
-                lineBlock(codeGenSomeToken(group.spaceRule)),
-            "};",
-            Line("source.tryAll!(void,"),
+            "// Group",
+            spaceLines,
+            "static if (__traits(compiles, rule)) auto ruleCopy = rule;",
+            "source.tryAll!(void,",
             lineBlock(
-                group.alts.map!( (alt) => [
-                    Line("(source) {"),
+                group.alts.map!( (alt) => lineList(
+                    "(source) {",
                     lineBlock(
-                        codeGenAlternate(alt)
+                        "// ... Alternate",
+                        "static if (__traits(compiles, rule)) rule = ruleCopy;",
+                        codeGenAlternate(alt),
                     ),
-                    Line("},"),
-                ]).join
+                    "},",
+                )).join
             ),
             ");",
         );
@@ -312,8 +368,6 @@ Line[] codeGenMultiCapture(MultiCapture mc) {
 
 
 Line[] codeGenVerbatim(VerbatimText vbt) {
-    // import std.string: unes
-    // writeln(vbt);
     return [
         Line(format!"parseVerbatim!\"%s\"(source);"
             (vbt.str))
@@ -353,7 +407,7 @@ auto interleave(R, T)(R range, T delimiter)  {
 
 
 Line[] codeGenWildCard() {
-    return [Line("source.popFront;")];
+    return lineList("source.popFront;");
 }
 
 
