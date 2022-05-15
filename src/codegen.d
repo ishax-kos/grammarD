@@ -381,38 +381,31 @@ version(unittest) {
         InputSource source;
         
         string sourceText = 
-        q{
-            A = (
-                "stuff"
-            )
-            B : 
-             | A
-             | Identifier
+        // q{
+        //     A = (
+        //         "stuff"
+        //     )
+        //     B : 
+        //      | A
+        //      | Identifier
 
-            C = (
-                B | "..."
-            )
-        };
-        // import("test/gram/dion.dart");
+        //     C = (
+        //         B | "..."
+        //     )
+        // };
+        import("test/gram/dion.dart");
         source = new InputSourceString(sourceText);
-        // source = new InputSourceString("Test : {Bungar, Dungar}");
-        
-        // return source.parseGrammar.to!string;
         assert(source !is null);
         Line[] lines = source.parseGrammar.map!(dec => 
             codeGenType(dec)
-        ).join(Line(""));
-        
-            // import std.algorithm;
-            // writeln(source.table);
-            // source.table.each!((v,k)=>writeln(v));
+        ).join(lineList("",""));
         return lines.linesToString;
     }
     
-    import parserhelpers;
-    import input;
-    import std.sumtype;
-    mixin(testCodeGen());
+    // import parserhelpers;
+    // import input;
+    // import std.sumtype;
+    // mixin(testCodeGen());
 }
 
 
@@ -422,14 +415,36 @@ unittest {
     import std.conv;
     writeln("---- Unittest ", __FILE__, " 1 ----");
     
-    File testrun = File("testrun.d", "wb");
+    File testrun = File("test/testrun.d", "wb");
+
+    testrun.writeln(lineList(
+        "module testrun;",
+        "import std.sumtype;",
+        "import parserhelpers;",
+        "import input;",
+        "",
+    ).linesToString);
     testrun.writeln(testCodeGen());
+    testrun.writeln(lineList(
+        "void main(string[] args) {",
+        lineBlock(
+            "import std.stdio;",
+            `InputSource source = new InputSourceString(" foo()");`,
+            "_parseWS(source);",
+            "writeln(_parseExpression(source));",
+            "readln();",
+            `source = new InputSourceString(" bar()()");`,
+            "_parseWS(source);",
+            "writeln(_parseExpression(source));",
+        ),
+    "}", 
+    ).linesToString);
+
     testrun.close;
+ 
+    import std.process: execute;
 
-    InputSource source = new InputSourceString("... big stuff  ");
-    
-    writeln(_parseC(source));
-
+    writeln(execute([`dmd`, `-gf`, `-I="./src"`, `-i`, `test/testrun.d`])[1]);
 }
 
 
